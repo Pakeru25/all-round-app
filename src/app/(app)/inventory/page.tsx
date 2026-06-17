@@ -35,23 +35,22 @@ export default async function InventoryPage({
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
-        title="Inventory"
-        description={activeLabel ? `Showing: ${activeLabel}` : "Everything you stock and sell."}
+        title={activeLabel ?? "Inventory"}
+        description={
+          activeLabel
+            ? `Items under ${activeLabel}.`
+            : "Browse by Packaging materials, Raw materials or Finished products in the sidebar."
+        }
         action={canWrite ? { href: "/inventory/new", label: "Add item" } : undefined}
       />
 
-      <div className="mb-4 flex items-center gap-4">
-        {canWrite ? (
-          <Link href="/inventory/categories" className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
-            Manage categories
-          </Link>
-        ) : null}
-        {activeLabel ? (
+      {activeLabel ? (
+        <div className="mb-4 flex items-center gap-4">
           <Link href="/inventory" className="text-sm text-zinc-500 underline">
             Clear filter
           </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
@@ -64,7 +63,7 @@ export default async function InventoryPage({
             <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
               <tr>
                 <th className="px-4 py-3 font-medium">Item</th>
-                <th className="px-4 py-3 font-medium">Category</th>
+                <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">In stock</th>
                 <th className="px-4 py-3 font-medium">Cost</th>
                 <th className="px-4 py-3 font-medium">Price</th>

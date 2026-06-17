@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card, CancelLink, Field, FormError, inputClassName } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { InventoryCategory, InventoryItem } from "@/types/database";
@@ -31,9 +30,9 @@ export function ItemForm({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Category">
+          <Field label="Type" hint="Packaging, raw or finished — groups the item in the sidebar.">
             <select name="category_id" defaultValue={defaults?.category_id ?? ""} className={inputClassName}>
-              <option value="">— None —</option>
+              <option value="">— Select type —</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -104,14 +103,6 @@ export function ItemForm({
           <SubmitButton>{submitLabel}</SubmitButton>
           <CancelLink href="/inventory" />
         </div>
-
-        <p className="text-xs text-zinc-400">
-          Need a new category first?{" "}
-          <Link href="/inventory/categories" className="underline">
-            Manage categories
-          </Link>
-          .
-        </p>
       </form>
     </Card>
   );

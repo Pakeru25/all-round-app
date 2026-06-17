@@ -15,14 +15,15 @@ cross join (values ('Rent'), ('Transport'), ('Utilities'), ('Salaries'), ('Suppl
 where o.name = 'Pakeru'
   and not exists (select 1 from expense_categories e where e.organization_id = o.id);
 
--- Starter inventory categories for the seeded org.
+-- The three fixed inventory categories every org starts with. Individual stock
+-- items (boxes, paper bags, cards, fabrics, …) are added under one of these.
 insert into inventory_categories (organization_id, name, description)
 select o.id, c.name, c.descr
 from organizations o
 cross join (values
-  ('Boxes', 'Packaging boxes'),
-  ('Poly Bags', 'Polythene bags'),
-  ('Fabrics', 'Fabric materials')
+  ('Packaging materials', 'Boxes, paper bags, poly bags, cards, etc.'),
+  ('Raw materials', 'Inputs consumed to produce finished goods.'),
+  ('Finished products', 'Completed goods ready for sale.')
 ) as c(name, descr)
 where o.name = 'Pakeru'
   and not exists (select 1 from inventory_categories i where i.organization_id = o.id);

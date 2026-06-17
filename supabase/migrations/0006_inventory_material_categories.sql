@@ -1,0 +1,28 @@
+-- =============================================================================
+-- 0006_inventory_material_categories.sql
+-- Restructure inventory categories to the three fixed material types:
+--   1. Packaging materials   2. Raw materials   3. Finished products
+-- Individual stock (boxes, paper bags, cards, fabrics, …) are now plain
+-- inventory_items added under one of these three categories.
+-- Safe to re-run.
+-- =============================================================================
+
+-- Drop the old starter categories. inventory_items.category_id is
+-- "on delete set null", so any items that referenced them are simply unlinked
+-- (re-assign them to one of the three types via the item editor).
+delete from inventory_categories
+where name in ('Boxes', 'Poly Bags', 'Fabrics');
+
+-- Ensure every organization has exactly the three material-type categories.
+insert into inventory_categories (organization_id, name, description)
+select o.id, c.name, c.descr
+from organizations o
+cross join (values
+  ('Packaging materials', 'Boxes, paper bags, poly bags, cards, etc.'),
+  ('Raw materials', 'Inputs consumed to produce finished goods.'),
+  ('Finished products', 'Completed goods ready for sale.')
+) as c(name, descr)
+where not exists (
+  select 1 from inventory_categories i
+  where i.organization_id = o.id and i.name = c.name
+);
