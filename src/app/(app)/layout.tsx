@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
 import { getSessionContext } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
   children,
@@ -15,6 +16,13 @@ export default async function AppLayout({
 
   const { profile, organization } = ctx;
 
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("recipient_id", profile.id)
+    .eq("is_read", false);
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar role={profile.role} />
@@ -23,6 +31,7 @@ export default async function AppLayout({
           orgName={organization?.name ?? "All Round App"}
           fullName={profile.full_name ?? profile.email ?? "User"}
           role={profile.role}
+          unreadCount={count ?? 0}
         />
         <main className="flex-1 overflow-y-auto bg-zinc-50 p-6 dark:bg-zinc-950">
           {children}

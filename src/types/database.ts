@@ -69,3 +69,63 @@ export interface Customer {
   created_at: string;
   updated_at: string;
 }
+
+export interface ExpenseCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Expense {
+  id: string;
+  organization_id: string;
+  category_id: string | null;
+  recorded_by: string | null;
+  expense_number: string | null;
+  amount: number;
+  description: string | null;
+  expense_date: string;
+  receipt_url: string | null;
+  created_at: string;
+}
+
+/** An expense joined with its category name (for list views). */
+export interface ExpenseWithCategory extends Expense {
+  expense_categories: { name: string } | null;
+}
+
+export type ActivityAction = "created" | "updated" | "deleted";
+
+export interface ActivityLogEntry {
+  id: string;
+  organization_id: string;
+  user_id: string | null;
+  action: ActivityAction;
+  entity_type: string;
+  entity_id: string | null;
+  description: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export type NotificationType =
+  | "sale_created"
+  | "expense_logged"
+  | "purchase_created"
+  | "inventory_low"
+  | "inventory_adjusted";
+
+export interface AppNotification {
+  id: string;
+  organization_id: string;
+  recipient_id: string;
+  triggered_by: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}

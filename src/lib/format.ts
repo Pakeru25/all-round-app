@@ -21,3 +21,15 @@ export function formatDate(value: string | Date | null | undefined): string {
     year: "numeric",
   }).format(d);
 }
+
+export function formatDateTime(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-GH", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}

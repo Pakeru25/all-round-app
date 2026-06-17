@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 import { ROLE_LABELS, type Role } from "@/lib/auth/roles";
 
@@ -5,10 +6,12 @@ export function TopBar({
   orgName,
   fullName,
   role,
+  unreadCount,
 }: {
   orgName: string;
   fullName: string;
   role: Role;
+  unreadCount: number;
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -25,16 +28,18 @@ export function TopBar({
       </div>
 
       <div className="ml-auto flex items-center gap-4">
-        <button
-          type="button"
+        <Link
+          href="/notifications"
           aria-label="Notifications"
           className="relative rounded-md p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-300 px-1 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
-            0
-          </span>
-        </button>
+          {unreadCount > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          ) : null}
+        </Link>
 
         <div className="flex items-center gap-3">
           <div className="text-right leading-tight">
