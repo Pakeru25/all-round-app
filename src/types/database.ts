@@ -66,8 +66,17 @@ export interface Customer {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  preferences: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** A customer row enriched with live figures from the `customer_stats` view. */
+export interface CustomerStats extends Customer {
+  total_spent: number;
+  order_count: number;
+  last_purchase: string | null;
+  first_purchase: string | null;
 }
 
 export interface ExpenseCategory {

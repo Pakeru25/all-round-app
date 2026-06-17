@@ -43,3 +43,19 @@ export const NAV_ITEMS: NavItem[] = [
 export function navItemsForRole(role: Role): NavItem[] {
   return NAV_ITEMS.filter((item) => item.roles.includes(role));
 }
+
+/** A dynamic child entry under a nav section (e.g. an inventory category). */
+export interface NavChild {
+  label: string;
+  href: string;
+  count?: number;
+  /** show a low-stock dot next to this child */
+  low?: boolean;
+}
+
+/** A top-level nav section, optionally with dynamic children + a badge. */
+export interface NavSection extends NavItem {
+  /** e.g. low-stock count shown on the Inventory parent */
+  badge?: number;
+  children?: NavChild[];
+}

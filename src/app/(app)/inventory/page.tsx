@@ -5,36 +5,58 @@ import { requireRole } from "@/lib/auth/session";
 import { formatCurrency } from "@/lib/format";
 import type { InventoryItemWithCategory } from "@/types/database";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string; filter?: string }>;
+}) {
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
+  const { category, filter } = await searchParams;
+  const lowOnly = filter === "low";
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("inventory_items")
-    .select("*, inventory_categories(name)")
-    .order("name");
-  const items = (data as InventoryItemWithCategory[] | null) ?? [];
+  let query = supabase.from("inventory_items").select("*, inventory_categories(name)").order("name");
+  if (category) query = query.eq("category_id", category);
+  const { data } = await query;
+  let items = (data as InventoryItemWithCategory[] | null) ?? [];
+  if (lowOnly) {
+    items = items.filter((it) => it.reorder_level > 0 && it.quantity_in_stock <= it.reorder_level);
+  }
+
+  let activeLabel: string | null = null;
+  if (lowOnly) {
+    activeLabel = "Low stock";
+  } else if (category) {
+    const { data: cat } = await supabase.from("inventory_categories").select("name").eq("id", category).single();
+    activeLabel = (cat as { name: string } | null)?.name ?? "Category";
+  }
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Inventory"
-        description="Everything you stock and sell."
+        description={activeLabel ? `Showing: ${activeLabel}` : "Everything you stock and sell."}
         action={canWrite ? { href: "/inventory/new", label: "Add item" } : undefined}
       />
 
-      {canWrite ? (
-        <div className="mb-4">
+      <div className="mb-4 flex items-center gap-4">
+        {canWrite ? (
           <Link href="/inventory/categories" className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
             Manage categories
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+        {activeLabel ? (
+          <Link href="/inventory" className="text-sm text-zinc-500 underline">
+            Clear filter
+          </Link>
+        ) : null}
+      </div>
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          No items yet.{canWrite ? " Use “Add item” to create your first one." : ""}
+          {activeLabel ? "No items match this filter." : "No items yet."}
+          {canWrite && !activeLabel ? " Use “Add item” to create your first one." : ""}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -54,7 +76,11 @@ export default async function InventoryPage() {
                 const low = item.reorder_level > 0 && item.quantity_in_stock <= item.reorder_level;
                 return (
                   <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{item.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/inventory/${item.id}`} className="text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-50">
+                        {item.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                       {item.inventory_categories?.name ?? "—"}
                     </td>
