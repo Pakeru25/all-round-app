@@ -29,15 +29,30 @@ export function orNull(value: string): string | null {
 }
 
 /**
- * Normalize a date cell to YYYY-MM-DD. Accepts ISO dates directly; otherwise
- * falls back to JS Date parsing, and to "today" if unparseable. NOTE: ambiguous
- * DD/MM vs MM/DD ordering follows JS Date (US-style) — see README if your sheet
- * uses day-first dates.
+ * Normalize a date cell to YYYY-MM-DD. Accepts ISO (2026-03-07) directly, and
+ * treats slash/dash dates as DAY-first (e.g. 13/7/2025 → 2025-07-13), which is
+ * how the Pakeru sheets are written. If the "day" exceeds 12 while the "month"
+ * doesn't, the two are swapped (tolerates the odd US-style row). Falls back to
+ * today if unparseable.
  */
 export function toDate(value: string): string {
   if (!value) return today();
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(value);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+
+  const dmy = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/.exec(value);
+  if (dmy) {
+    let day = Number(dmy[1]);
+    let month = Number(dmy[2]);
+    let year = Number(dmy[3]);
+    if (year < 100) year += 2000;
+    if (month > 12 && day <= 12) [day, month] = [month, day]; // tolerate a stray M/D row
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? today() : d.toISOString().slice(0, 10);
 }
@@ -72,12 +87,13 @@ export interface CustomerInput {
 
 export function mapCustomer(row: Row): CustomerInput {
   return {
-    name: pick(row, "name", "customer", "customer name", "full name"),
+    // In the Pakeru sheet the "CUSTOMER ID" column holds the person's name.
+    name: pick(row, "name", "customer", "customer name", "full name", "customer id"),
     email: orNull(pick(row, "email", "e-mail")),
-    phone: orNull(pick(row, "phone", "phone number", "tel", "mobile", "contact")),
+    phone: orNull(pick(row, "phone", "phone number", "tel", "mobile", "contact", "contacts")),
     address: orNull(pick(row, "address", "location")),
-    notes: orNull(pick(row, "notes", "note", "comments")),
-    preferences: orNull(pick(row, "preferences", "prefs")),
+    notes: orNull(pick(row, "notes", "note", "comments", "demographics")),
+    preferences: orNull(pick(row, "preferences", "prefs", "channel")),
   };
 }
 
@@ -170,10 +186,16 @@ export interface ExpenseInput {
 }
 
 export function mapExpense(row: Row): ExpenseInput {
+  // The expenses table has no vendor column, so fold VENDOR into the description.
+  const desc = pick(row, "description", "desc", "details", "item");
+  const vendor = pick(row, "vendor", "supplier", "paid to");
+  const note = pick(row, "notes", "note", "comments");
+  const description =
+    [desc || note, vendor ? `Vendor: ${vendor}` : ""].filter(Boolean).join(" — ") || null;
   return {
-    categoryName: pick(row, "category", "category name", "type"),
+    categoryName: pick(row, "expense category", "category", "category name", "type"),
     amount: num(pick(row, "amount", "cost", "total", "value")),
-    description: orNull(pick(row, "description", "desc", "details", "notes", "item")),
+    description,
     expense_date: toDate(pick(row, "date", "expense date", "expense_date")),
     expense_number: orNull(pick(row, "expense number", "expense_number", "number", "ref", "reference")),
   };
@@ -201,22 +223,25 @@ export interface SaleLineInput {
 }
 
 export function mapSaleLine(row: Row): SaleLineInput {
-  const qty = num(pick(row, "quantity", "qty", "units"));
-  const unitPrice = num(pick(row, "unit price", "price", "selling price", "rate"));
-  const lineTotalRaw = pick(row, "total", "line total", "amount", "subtotal");
+  const qty = num(pick(row, "units sold", "quantity", "qty", "units"));
+  // GROSS SALE is the line value before ADJUSTMENTS (which we treat as discount,
+  // so sale total = gross − discount = NET SALES).
+  const gross = num(pick(row, "gross sale", "gross", "total", "line total", "amount", "subtotal"));
+  const unitPriceRaw = pick(row, "unit price", "price", "selling price", "rate");
+  const unitPrice = unitPriceRaw !== "" ? num(unitPriceRaw) : qty ? gross / qty : 0;
   return {
-    number: orNull(pick(row, "sale number", "sale_number", "invoice", "invoice number", "receipt", "number")),
+    number: orNull(pick(row, "order id", "sale number", "sale_number", "invoice", "invoice number", "receipt", "number")),
     date: toDate(pick(row, "date", "sale date", "sale_date")),
-    customerName: pick(row, "customer", "customer name", "client", "name"),
+    customerName: pick(row, "customer", "customer name", "client", "customer id", "name"),
     paymentMethod: paymentMethod(pick(row, "payment method", "payment", "method")),
     paymentStatus: paymentStatus(pick(row, "payment status", "status")),
-    discount: num(pick(row, "discount")),
+    discount: num(pick(row, "discount", "adjustments")),
     notes: orNull(pick(row, "notes", "note", "comments")),
-    itemName: pick(row, "item", "item name", "product", "product name", "description"),
+    itemName: pick(row, "product", "product name", "item", "item name", "description"),
     sku: pick(row, "sku", "code", "item code", "product code"),
     quantity: qty,
     unitPrice,
-    lineTotal: lineTotalRaw === "" ? qty * unitPrice : num(lineTotalRaw),
+    lineTotal: gross !== 0 ? gross : qty * unitPrice,
   };
 }
 

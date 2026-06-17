@@ -31,6 +31,17 @@ import {
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
+/** Accepted file names per sheet (matched case-insensitively; first found wins). */
+const FILES = {
+  customers: ["customers", "customer"],
+  suppliers: ["suppliers", "supplier"],
+  employees: ["employees", "employee", "staff"],
+  inventory: ["inventory", "products", "items"], // NB: prices.csv is intentionally excluded
+  expenses: ["expenses", "expense"],
+  sales: ["sales"],
+  purchases: ["purchases", "purchase"],
+};
+
 /** A case-insensitive name→id lookup. */
 class NameMap {
   private readonly byKey = new Map<string, string>();
@@ -75,10 +86,11 @@ async function main(): Promise<void> {
   await importSuppliers(supabase, orgId, suppliers);
   await importEmployees(supabase, orgId);
   await importItems(supabase, orgId, invCategories, items, itemsBySku);
+  await importItemsFromSales(supabase, orgId, items, itemsBySku);
 
   // ---- Transactions (triggers off for the bulk historical load) -------------
   const hasTransactions =
-    readCsv("expenses").length || readCsv("sales").length || readCsv("purchases").length;
+    readCsv(FILES.expenses).length || readCsv(FILES.sales).length || readCsv(FILES.purchases).length;
 
   if (hasTransactions && !DRY_RUN) await setTriggers(supabase, false);
   try {
@@ -199,7 +211,7 @@ async function importCustomers(
   orgId: string,
   customers: NameMap,
 ): Promise<void> {
-  const rows = readCsv("customers");
+  const rows = readCsv(FILES.customers);
   let created = 0;
   for (const row of rows) {
     const input = mapCustomer(row);
@@ -233,7 +245,7 @@ async function importSuppliers(
   orgId: string,
   suppliers: NameMap,
 ): Promise<void> {
-  const rows = readCsv("suppliers");
+  const rows = readCsv(FILES.suppliers);
   let created = 0;
   for (const row of rows) {
     const input = mapSupplier(row);
@@ -263,7 +275,7 @@ async function importSuppliers(
 }
 
 async function importEmployees(supabase: SupabaseClient, orgId: string): Promise<void> {
-  const rows = readCsv("employees");
+  const rows = readCsv(FILES.employees);
   let created = 0;
   const seen = new Set<string>();
   for (const row of rows) {
@@ -296,7 +308,7 @@ async function importItems(
   byName: NameMap,
   bySku: NameMap,
 ): Promise<void> {
-  const rows = readCsv("inventory");
+  const rows = readCsv(FILES.inventory);
   let created = 0;
   for (const row of rows) {
     const input = mapItem(row);
@@ -336,13 +348,69 @@ async function importItems(
   report("inventory_items", rows.length, created);
 }
 
+/**
+ * Build inventory items from the distinct PRODUCT + SKU pairs in the sales sheet
+ * (when there is no products sheet). Selling price is taken from the sale prices;
+ * cost and current stock default to 0 for the owner to fill in afterwards.
+ */
+async function importItemsFromSales(
+  supabase: SupabaseClient,
+  orgId: string,
+  byName: NameMap,
+  bySku: NameMap,
+): Promise<void> {
+  const rows = readCsv(FILES.sales);
+  if (!rows.length) return;
+
+  const derived = new Map<string, { name: string; sku: string; price: number }>();
+  for (const line of rows.map(mapSaleLine)) {
+    const name = line.itemName || line.sku;
+    if (!name) continue;
+    if (byName.get(line.itemName) || (line.sku && bySku.get(line.sku))) continue; // already exists
+    const key = (line.sku || name).toLowerCase();
+    const existing = derived.get(key);
+    if (!existing) derived.set(key, { name, sku: line.sku, price: line.unitPrice });
+    else if (line.unitPrice > existing.price) existing.price = line.unitPrice; // keep the highest seen
+  }
+
+  let created = 0;
+  for (const it of derived.values()) {
+    if (DRY_RUN) {
+      byName.set(it.name, "(new)");
+      if (it.sku) bySku.set(it.sku, "(new)");
+      created++;
+      continue;
+    }
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .insert({
+        organization_id: orgId,
+        name: it.name,
+        sku: it.sku || null,
+        selling_price: it.price,
+        cost_price: 0,
+        quantity_in_stock: 0,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      warn(`derived item "${it.name}" (${it.sku || "no sku"}): ${error.message}`);
+      continue;
+    }
+    byName.set(it.name, data.id as string);
+    if (it.sku) bySku.set(it.sku, data.id as string);
+    created++;
+  }
+  report("inventory (from sales)", derived.size, created);
+}
+
 async function importExpenses(
   supabase: SupabaseClient,
   orgId: string,
   recordedBy: string | null,
   expCategories: NameMap,
 ): Promise<void> {
-  const rows = readCsv("expenses");
+  const rows = readCsv(FILES.expenses);
   let created = 0;
   for (const row of rows) {
     const input = mapExpense(row);
@@ -390,7 +458,7 @@ async function importSales(
   items: NameMap,
   itemsBySku: NameMap,
 ): Promise<void> {
-  const rows = readCsv("sales");
+  const rows = readCsv(FILES.sales);
   const groups = groupLines(rows.map(mapSaleLine), (l) => l.number);
   let created = 0;
   for (const group of groups) {
@@ -462,7 +530,7 @@ async function importPurchases(
   items: NameMap,
   itemsBySku: NameMap,
 ): Promise<void> {
-  const rows = readCsv("purchases");
+  const rows = readCsv(FILES.purchases);
   const groups = groupLines(rows.map(mapPurchaseLine), (l) => l.number);
   let created = 0;
   for (const group of groups) {
