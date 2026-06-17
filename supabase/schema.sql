@@ -731,3 +731,70 @@ left join sales s on s.customer_id = c.id
 group by c.id;
 
 grant select on customer_stats to authenticated;
+
+-- >>> migrations/0006_admin.sql
+
+-- =============================================================================
+-- 0006_admin.sql — migration helper for the one-time Google Sheets import.
+-- Lets the service-role migration script switch the side-effect triggers off for
+-- a historical bulk load and back on afterwards (see scripts/migrate). Only the
+-- service role should ever call it.
+-- =============================================================================
+
+create or replace function public.set_transaction_triggers(p_enabled boolean)
+  returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_enabled then
+    alter table sales          enable trigger trg_new_sale;
+    alter table sale_items     enable trigger trg_sale_item;
+    alter table purchases      enable trigger trg_new_purchase;
+    alter table purchase_items enable trigger trg_purchase_item;
+    alter table expenses       enable trigger trg_new_expense;
+  else
+    alter table sales          disable trigger trg_new_sale;
+    alter table sale_items     disable trigger trg_sale_item;
+    alter table purchases      disable trigger trg_new_purchase;
+    alter table purchase_items disable trigger trg_purchase_item;
+    alter table expenses       disable trigger trg_new_expense;
+  end if;
+end $$;
+
+revoke all on function public.set_transaction_triggers(boolean) from public;
+revoke all on function public.set_transaction_triggers(boolean) from anon, authenticated;
+
+-- >>> migrations/0007_inventory_groups.sql
+
+-- =============================================================================
+-- 0007_inventory_groups.sql — two-level inventory categories (groups → types).
+-- A category is a GROUP when parent_id is null, and a type when it has a parent.
+-- Items attach to a type-level category via inventory_items.category_id.
+-- =============================================================================
+
+alter table inventory_categories
+  add column if not exists parent_id uuid references inventory_categories (id) on delete set null;
+create index if not exists inventory_categories_parent_idx on inventory_categories (parent_id);
+
+insert into inventory_categories (organization_id, name, description, parent_id)
+select o.id, g.name, g.descr, null
+from organizations o
+cross join (values
+  ('Packaging materials', 'Boxes, bags, cards and other packaging'),
+  ('Raw materials',       'Inputs used to produce finished goods'),
+  ('Finished Products',   'Completed goods ready for sale')
+) as g(name, descr)
+where not exists (
+  select 1 from inventory_categories c
+  where c.organization_id = o.id and c.parent_id is null and c.name = g.name
+);
+
+update inventory_categories child
+set parent_id = grp.id
+from inventory_categories grp
+where grp.organization_id = child.organization_id
+  and grp.parent_id is null
+  and child.parent_id is null
+  and child.name not in ('Packaging materials', 'Raw materials', 'Finished Products')
+  and (
+    (grp.name = 'Packaging materials' and child.name in ('Boxes', 'Poly Bags')) or
+    (grp.name = 'Raw materials'       and child.name in ('Fabrics'))
+  );

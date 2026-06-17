@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Card, Field, FormError, inputClassName } from "@/components/ui/form";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import type { InventoryItemWithCategory } from "@/types/database";
+import { logDamage } from "../actions";
 
 type Movement = {
   id: string;
@@ -24,10 +27,17 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProductDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
   const { id } = await params;
+  const { error } = await searchParams;
 
   const supabase = await createClient();
   const { data: itemData } = await supabase
@@ -45,6 +55,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     .order("created_at", { ascending: false })
     .limit(50);
   const movements = (movData as Movement[] | null) ?? [];
+
+  const { data: dmgData } = await supabase
+    .from("inventory_movements")
+    .select("quantity")
+    .eq("inventory_item_id", id)
+    .eq("reason", "damage");
+  const defective = ((dmgData as { quantity: number }[] | null) ?? []).reduce(
+    (sum, m) => sum + Number(m.quantity),
+    0,
+  );
 
   const low = item.reorder_level > 0 && item.quantity_in_stock <= item.reorder_level;
   const stockValue = item.quantity_in_stock * item.cost_price;
@@ -64,10 +84,37 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           value={`${item.quantity_in_stock} ${item.unit}`}
           hint={low ? `⚠ at/below reorder level (${item.reorder_level})` : `Reorder at ${item.reorder_level}`}
         />
+        <StatCard label="Defective" value={`${defective} ${item.unit}`} hint="Total logged as damaged" />
         <StatCard label="Stock value (at cost)" value={formatCurrency(stockValue)} />
-        <StatCard label="Selling price" value={formatCurrency(item.selling_price)} />
         <StatCard label="Margin / unit" value={formatCurrency(margin)} />
       </div>
+
+      {canWrite ? (
+        <div className="mt-4">
+          <Card>
+            <form action={logDamage.bind(null, item.id)} className="flex flex-col gap-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Log damaged / defective units</h2>
+              <FormError message={error} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label={`Quantity (${item.unit})`}>
+                  <input name="quantity" type="number" step="0.01" min="0" required className={inputClassName} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Note" hint="Optional — what happened?">
+                    <input name="notes" className={inputClassName} />
+                  </Field>
+                </div>
+              </div>
+              <div>
+                <SubmitButton>Record damage</SubmitButton>
+              </div>
+              <p className="text-xs text-zinc-400">
+                This reduces available stock and adds to the defective total (recorded in the stock history below).
+              </p>
+            </form>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

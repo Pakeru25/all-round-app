@@ -44,13 +44,15 @@ export function navItemsForRole(role: Role): NavItem[] {
   return NAV_ITEMS.filter((item) => item.roles.includes(role));
 }
 
-/** A dynamic child entry under a nav section (e.g. an inventory category). */
+/** A dynamic child entry under a nav section (e.g. an inventory group or category). */
 export interface NavChild {
   label: string;
   href: string;
   count?: number;
   /** show a low-stock dot next to this child */
   low?: boolean;
+  /** nested entries (e.g. the categories under an inventory group) */
+  children?: NavChild[];
 }
 
 /** A top-level nav section, optionally with dynamic children + a badge. */

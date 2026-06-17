@@ -16,6 +16,8 @@ export async function createCategory(formData: FormData) {
     organization_id: ctx.profile.organization_id,
     name: str(formData.get("name")),
     description: strOrNull(formData.get("description")),
+    // Empty value = a new top-level group; otherwise the chosen group is the parent.
+    parent_id: strOrNull(formData.get("parent_id")),
   });
 
   if (error) redirect(`/inventory/categories?error=${encodeURIComponent(error.message)}`);

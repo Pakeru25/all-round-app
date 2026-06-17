@@ -16,6 +16,22 @@ export function ItemForm({
   submitLabel: string;
   error?: string;
 }) {
+  // Items attach to a type-level category, shown grouped under their parent group.
+  const groups = categories.filter((c) => c.parent_id === null);
+  const groupName = new Map(groups.map((g) => [g.id, g.name] as const));
+  const typesByGroup = new Map<string, InventoryCategory[]>();
+  const ungrouped: InventoryCategory[] = [];
+  for (const c of categories) {
+    if (!c.parent_id) continue;
+    if (groupName.has(c.parent_id)) {
+      const bucket = typesByGroup.get(c.parent_id);
+      if (bucket) bucket.push(c);
+      else typesByGroup.set(c.parent_id, [c]);
+    } else {
+      ungrouped.push(c);
+    }
+  }
+
   return (
     <Card>
       <form action={action} className="flex max-w-2xl flex-col gap-4">
@@ -34,11 +50,26 @@ export function ItemForm({
           <Field label="Category">
             <select name="category_id" defaultValue={defaults?.category_id ?? ""} className={inputClassName}>
               <option value="">— None —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {groups
+                .filter((g) => (typesByGroup.get(g.id) ?? []).length > 0)
+                .map((g) => (
+                  <optgroup key={g.id} label={g.name}>
+                    {(typesByGroup.get(g.id) ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              {ungrouped.length > 0 ? (
+                <optgroup label="Other">
+                  {ungrouped.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </Field>
           <Field label="Unit" hint="e.g. pieces, meters, rolls, kg">

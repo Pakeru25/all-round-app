@@ -23,13 +23,14 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
   const supabase = await createClient();
 
   const [catsRes, itemsRes, expCatsRes, custRes] = await Promise.all([
-    supabase.from("inventory_categories").select("id,name").order("name"),
+    supabase.from("inventory_categories").select("id,name,parent_id").order("name"),
     supabase.from("inventory_items").select("id,category_id,quantity_in_stock,reorder_level"),
     supabase.from("expense_categories").select("id,name").order("name"),
     supabase.from("customer_stats").select("total_spent"),
   ]);
 
-  const categories = (catsRes.data as { id: string; name: string }[] | null) ?? [];
+  const categories =
+    (catsRes.data as { id: string; name: string; parent_id: string | null }[] | null) ?? [];
   const items = (itemsRes.data as ItemRow[] | null) ?? [];
   const expenseCats = (expCatsRes.data as { id: string; name: string }[] | null) ?? [];
   const customerStats = (custRes.data as { total_spent: number }[] | null) ?? [];
@@ -46,15 +47,35 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
       if (it.category_id) lowByCat.set(it.category_id, (lowByCat.get(it.category_id) ?? 0) + 1);
     }
   }
+  // Two levels: top-level groups (parent_id null) each expand to their types.
+  const groups = categories.filter((c) => c.parent_id === null);
+  const childrenByParent = new Map<string, typeof categories>();
+  for (const c of categories) {
+    if (!c.parent_id) continue;
+    const bucket = childrenByParent.get(c.parent_id);
+    if (bucket) bucket.push(c);
+    else childrenByParent.set(c.parent_id, [c]);
+  }
+  const groupChildren: NavChild[] = groups.map((g) => {
+    const types = childrenByParent.get(g.id) ?? [];
+    const typeChildren: NavChild[] = types.map((t) => ({
+      label: t.name,
+      href: `/inventory/category/${t.id}`,
+      count: countByCat.get(t.id) ?? 0,
+      low: (lowByCat.get(t.id) ?? 0) > 0,
+    }));
+    // A group's count/low rolls up its types (plus any items attached directly to it).
+    const count =
+      (countByCat.get(g.id) ?? 0) + types.reduce((sum, t) => sum + (countByCat.get(t.id) ?? 0), 0);
+    const low =
+      (lowByCat.get(g.id) ?? 0) > 0 || types.some((t) => (lowByCat.get(t.id) ?? 0) > 0);
+    return { label: g.name, href: `/inventory/group/${g.id}`, count, low, children: typeChildren };
+  });
+
   const inventoryChildren: NavChild[] = [
     { label: "All items", href: "/inventory", count: items.length },
     ...(lowTotal > 0 ? [{ label: "Low stock", href: "/inventory?filter=low", count: lowTotal, low: true }] : []),
-    ...categories.map((c) => ({
-      label: c.name,
-      href: `/inventory?category=${c.id}`,
-      count: countByCat.get(c.id) ?? 0,
-      low: (lowByCat.get(c.id) ?? 0) > 0,
-    })),
+    ...groupChildren,
   ];
 
   // --- Expenses: by category ------------------------------------------------

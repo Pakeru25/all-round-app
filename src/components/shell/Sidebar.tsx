@@ -18,7 +18,7 @@ import {
   ChevronDown,
   type LucideIcon,
 } from "lucide-react";
-import { ROLE_LABELS, type NavSection, type Role } from "@/lib/auth/roles";
+import { ROLE_LABELS, type NavChild, type NavSection, type Role } from "@/lib/auth/roles";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -58,19 +58,73 @@ export function Sidebar({ role, sections }: { role: Role; sections: NavSection[]
   const currentQuery = searchParams.toString();
 
   const sectionActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
-  const activeHref = sections.find((s) => sectionActive(s.href))?.href ?? null;
-  const [open, setOpen] = useState<string[]>(activeHref ? [activeHref] : []);
-  const toggle = (href: string) =>
-    setOpen((cur) => (cur.includes(href) ? cur.filter((h) => h !== href) : [...cur, href]));
 
   const childActive = (href: string) => {
     const [path, query] = href.split("?");
     if (pathname !== path) return false;
-    if (!query) return currentQuery === ""; // the "All" entry
+    if (!query) return currentQuery === ""; // a path-only entry (e.g. "All items", a category)
     const params = new URLSearchParams(query);
     for (const [k, v] of params) if (searchParams.get(k) !== v) return false;
     return true;
   };
+
+  // Open the active section, plus any nested group whose descendant is active.
+  const initialOpen: string[] = [];
+  for (const section of sections) {
+    if (sectionActive(section.href)) initialOpen.push(section.href);
+    for (const child of section.children ?? []) {
+      if (child.children?.some((leaf) => childActive(leaf.href))) initialOpen.push(child.href);
+    }
+  }
+  const [open, setOpen] = useState<string[]>(initialOpen);
+  const toggle = (href: string) =>
+    setOpen((cur) => (cur.includes(href) ? cur.filter((h) => h !== href) : [...cur, href]));
+
+  function renderChild(child: NavChild) {
+    const hasChildren = !!child.children && child.children.length > 0;
+
+    if (!hasChildren) {
+      return (
+        <li key={child.href}>
+          <Link href={child.href} className={childClass(childActive(child.href))}>
+            {child.low ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" /> : null}
+            <span className="flex-1 truncate">{child.label}</span>
+            {typeof child.count === "number" ? (
+              <span className="text-xs text-zinc-400">{child.count}</span>
+            ) : null}
+          </Link>
+        </li>
+      );
+    }
+
+    const expanded = open.includes(child.href);
+    return (
+      <li key={child.href}>
+        <div className={childClass(childActive(child.href))}>
+          <Link href={child.href} className="flex flex-1 items-center gap-2 truncate">
+            {child.low ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" /> : null}
+            <span className="flex-1 truncate">{child.label}</span>
+            {typeof child.count === "number" ? (
+              <span className="text-xs text-zinc-400">{child.count}</span>
+            ) : null}
+          </Link>
+          <button
+            type="button"
+            aria-label={`Toggle ${child.label}`}
+            onClick={() => toggle(child.href)}
+            className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+        {expanded ? (
+          <ul className="mt-0.5 space-y-0.5 border-l border-zinc-200 pl-3 dark:border-zinc-800 ml-1.5">
+            {child.children!.map(renderChild)}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
@@ -121,17 +175,7 @@ export function Sidebar({ role, sections }: { role: Role; sections: NavSection[]
 
               {/* Expanded (clicked or active) is always shown; otherwise reveal on hover on desktop. */}
               <ul className={`${expanded ? "block" : "hidden md:group-hover:block"} mt-1 space-y-0.5 pl-9 pr-1`}>
-                {section.children!.map((child) => (
-                  <li key={child.href}>
-                    <Link href={child.href} className={childClass(childActive(child.href))}>
-                      {child.low ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" /> : null}
-                      <span className="flex-1 truncate">{child.label}</span>
-                      {typeof child.count === "number" ? (
-                        <span className="text-xs text-zinc-400">{child.count}</span>
-                      ) : null}
-                    </Link>
-                  </li>
-                ))}
+                {section.children!.map(renderChild)}
               </ul>
             </div>
           );

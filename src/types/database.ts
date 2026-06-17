@@ -30,6 +30,8 @@ export interface Organization {
 export interface InventoryCategory {
   id: string;
   organization_id: string;
+  /** Null = a top-level group (e.g. "Packaging materials"); set = a type under a group. */
+  parent_id: string | null;
   name: string;
   description: string | null;
   created_at: string;
