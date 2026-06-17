@@ -13,7 +13,30 @@
 delete from inventory_categories
 where name in ('Boxes', 'Poly Bags', 'Fabrics');
 
+-- Collapse any duplicate categories (same name within an org, case-insensitive),
+-- keeping the oldest row. Items on the duplicates are repointed to the kept row
+-- first so none lose their type, then the extra rows are removed.
+update inventory_items i
+set category_id = r.keep_id
+from (
+  select id,
+         row_number() over (partition by organization_id, lower(trim(name)) order by created_at) as rn,
+         first_value(id) over (partition by organization_id, lower(trim(name)) order by created_at) as keep_id
+  from inventory_categories
+) r
+where i.category_id = r.id and r.rn > 1;
+
+delete from inventory_categories c
+using (
+  select id,
+         row_number() over (partition by organization_id, lower(trim(name)) order by created_at) as rn
+  from inventory_categories
+) r
+where c.id = r.id and r.rn > 1;
+
 -- Ensure every organization has exactly the three material-type categories.
+-- The existence check is case-insensitive so a differently-cased row (e.g.
+-- "Finished Products") is treated as already present and not duplicated.
 insert into inventory_categories (organization_id, name, description)
 select o.id, c.name, c.descr
 from organizations o
@@ -24,5 +47,6 @@ cross join (values
 ) as c(name, descr)
 where not exists (
   select 1 from inventory_categories i
-  where i.organization_id = o.id and i.name = c.name
+  where i.organization_id = o.id
+    and lower(trim(i.name)) = lower(trim(c.name))
 );
