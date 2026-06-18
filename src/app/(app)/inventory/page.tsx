@@ -33,9 +33,12 @@ export default async function InventoryPage() {
       />
 
       {canWrite ? (
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-4">
           <Link href="/inventory/categories" className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
             Manage categories
+          </Link>
+          <Link href="/inventory/import" className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
+            Import CSV
           </Link>
         </div>
       ) : null}
