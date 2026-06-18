@@ -47,6 +47,7 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
     }
   }
   const inventoryChildren: NavChild[] = [
+    { label: "All", href: "/inventory/all", count: items.length },
     ...INVENTORY_TYPES.map((t) => ({
       label: t.label,
       href: `/inventory/type/${t.slug}`,
