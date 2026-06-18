@@ -122,6 +122,54 @@ export interface ExpenseWithCategory extends Expense {
   expense_categories: { name: string } | null;
 }
 
+export interface Sale {
+  id: string;
+  organization_id: string;
+  customer_id: string | null;
+  recorded_by: string | null;
+  sale_number: string | null;
+  sale_date: string;
+  subtotal: number;
+  discount: number;
+  total_amount: number;
+  payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface SaleItem {
+  id: string;
+  sale_id: string;
+  inventory_item_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
+export interface Purchase {
+  id: string;
+  organization_id: string;
+  supplier_id: string | null;
+  recorded_by: string | null;
+  purchase_number: string | null;
+  purchase_date: string;
+  total_amount: number;
+  payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchase_id: string;
+  inventory_item_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+}
+
 export type ActivityAction = "created" | "updated" | "deleted";
 
 export interface ActivityLogEntry {

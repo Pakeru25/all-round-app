@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
@@ -9,6 +10,18 @@ const ACTION_STYLES: Record<string, string> = {
   updated: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   deleted: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
 };
+
+const ENTITY_ROUTES: Record<string, string> = {
+  expense: "/expenses",
+  sale: "/sales",
+  purchase: "/purchases",
+};
+
+function hrefFor(entry: ActivityLogEntry): string | null {
+  if (entry.action === "deleted" || !entry.entity_id) return null;
+  const base = ENTITY_ROUTES[entry.entity_type.toLowerCase()];
+  return base ? `${base}/${entry.entity_id}` : null;
+}
 
 export default async function ActivityPage() {
   await requireRole(["owner", "manager"]);
@@ -34,26 +47,44 @@ export default async function ActivityPage() {
         </div>
       ) : (
         <ol className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="flex items-start gap-3 border-b border-zinc-100 px-4 py-3 last:border-b-0 dark:border-zinc-800"
-            >
-              <span
-                className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                  ACTION_STYLES[entry.action] ?? "bg-zinc-100 text-zinc-600"
-                }`}
+          {entries.map((entry) => {
+            const href = hrefFor(entry);
+            const body = (
+              <>
+                <span
+                  className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    ACTION_STYLES[entry.action] ?? "bg-zinc-100 text-zinc-600"
+                  }`}
+                >
+                  {entry.action}
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200">{entry.description}</p>
+                  <p className="text-xs text-zinc-400">
+                    {entry.entity_type} · {formatDateTime(entry.created_at)}
+                  </p>
+                </div>
+              </>
+            );
+
+            return (
+              <li
+                key={entry.id}
+                className="border-b border-zinc-100 last:border-b-0 dark:border-zinc-800"
               >
-                {entry.action}
-              </span>
-              <div className="flex-1">
-                <p className="text-sm text-zinc-800 dark:text-zinc-200">{entry.description}</p>
-                <p className="text-xs text-zinc-400">
-                  {entry.entity_type} · {formatDateTime(entry.created_at)}
-                </p>
-              </div>
-            </li>
-          ))}
+                {href ? (
+                  <Link
+                    href={href}
+                    className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div className="flex items-start gap-3 px-4 py-3">{body}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>
