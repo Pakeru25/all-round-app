@@ -14,7 +14,7 @@ export default async function CustomersPage({
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
   const { tier } = await searchParams;
-  const activeTier: CustomerTier | null = tier === "elite" || tier === "addition" ? tier : null;
+  const activeTier: CustomerTier | null = tier === "elite" || tier === "edition" ? tier : null;
 
   const supabase = await createClient();
   const { data } = await supabase.from("customer_stats").select("*").order("total_spent", { ascending: false });
@@ -43,56 +43,52 @@ export default async function CustomersPage({
           {canWrite && !activeTier ? " Use “Add customer” to create your first one." : ""}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
-              <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Tier</th>
-                <th className="px-4 py-3 font-medium">Lifetime value</th>
-                <th className="px-4 py-3 font-medium">Orders</th>
-                <th className="px-4 py-3 font-medium">Last order</th>
-                {canWrite ? <th className="px-4 py-3" /> : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {customers.map((c) => {
-                const t = tierForSpend(Number(c.total_spent));
-                return (
-                  <tr key={c.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    <td className="px-4 py-3 font-medium">
-                      <Link href={`/customers/${c.id}`} className="text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-50">
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TIER_BADGE[t]}`}>
-                        {TIER_LABELS[t]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                      {formatCurrency(Number(c.total_spent))}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{c.order_count}</td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                      {c.last_purchase ? formatDate(c.last_purchase) : "—"}
-                    </td>
-                    {canWrite ? (
-                      <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/customers/${c.id}/edit`}
-                          className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300"
-                        >
-                          Edit
-                        </Link>
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+          <li className="hidden px-4 py-3 text-xs uppercase tracking-wide text-zinc-500 sm:grid sm:grid-cols-[2fr_1fr_1fr_0.7fr_1fr_auto] sm:gap-4 sm:items-center">
+            <span>Name</span>
+            <span>Tier</span>
+            <span>Lifetime value</span>
+            <span>Orders</span>
+            <span>Last order</span>
+            {canWrite ? <span className="w-10" /> : null}
+          </li>
+          {customers.map((c) => {
+            const t = tierForSpend(Number(c.total_spent));
+            return (
+              <li
+                key={c.id}
+                className="flex items-center gap-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+              >
+                <Link
+                  href={`/customers/${c.id}`}
+                  className="grid flex-1 cursor-pointer grid-cols-2 gap-2 px-4 py-3 text-sm sm:grid-cols-[2fr_1fr_1fr_0.7fr_1fr] sm:gap-4 sm:items-center"
+                >
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50">{c.name}</span>
+                  <span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TIER_BADGE[t]}`}>
+                      {TIER_LABELS[t]}
+                    </span>
+                  </span>
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                    {formatCurrency(Number(c.total_spent))}
+                  </span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{c.order_count}</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    {c.last_purchase ? formatDate(c.last_purchase) : "—"}
+                  </span>
+                </Link>
+                {canWrite ? (
+                  <Link
+                    href={`/customers/${c.id}/edit`}
+                    className="px-4 py-3 text-sm font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300"
+                  >
+                    Edit
+                  </Link>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

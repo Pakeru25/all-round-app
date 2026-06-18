@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { TIER_BADGE, TIER_LABELS, tierForSpend } from "@/lib/segments";
+import { Field, FormError, inputClassName } from "@/components/ui/form";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { CustomerStats } from "@/types/database";
+import { recordHistoricalSale } from "../sales-actions";
 
 type Sale = {
   id: string;
@@ -32,10 +35,17 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
   const { id } = await params;
+  const { error } = await searchParams;
 
   const supabase = await createClient();
   const { data: cData } = await supabase.from("customer_stats").select("*").eq("id", id).single();
@@ -52,6 +62,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   const tier = tierForSpend(Number(c.total_spent));
   const avg = c.order_count > 0 ? Number(c.total_spent) / c.order_count : 0;
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -119,6 +130,54 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           )}
         </div>
       </div>
+
+      {canWrite ? (
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Add historical sale</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            For sales made before this system (e.g. from the imported Excel sheet). They count toward lifetime value
+            but don&apos;t move inventory.
+          </p>
+          <form action={recordHistoricalSale.bind(null, c.id)} className="flex flex-col gap-4">
+            <FormError message={error} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Sale date">
+                <input
+                  type="date"
+                  name="sale_date"
+                  required
+                  defaultValue={today}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="Amount (GH₵)">
+                <input
+                  type="number"
+                  name="total_amount"
+                  required
+                  min="0"
+                  step="0.01"
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="Payment method">
+                <select name="payment_method" defaultValue="cash" className={inputClassName}>
+                  <option value="cash">Cash</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="card">Card</option>
+                  <option value="credit">Credit</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Notes (optional)">
+              <input name="notes" className={inputClassName} placeholder="e.g. Sales sheet row 42" />
+            </Field>
+            <div>
+              <SubmitButton>Record historical sale</SubmitButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
