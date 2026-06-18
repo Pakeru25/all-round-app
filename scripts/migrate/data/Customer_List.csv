@@ -1,0 +1,47 @@
+﻿CUSTOMER ID,FIRST PURCHASE DATE,LAST PURCHASE DATE,NUMBER OF ORDERS,TOTAL REVENUE,AVERAGE ORDER VALUE,CHANNEL,DEMOGRAPHICS,CONTACTS
+Abeiku,3/17/2025,7/13/2025,9,2750,305.5555556,Retail,"Male, 30-40, COO of pizzaman, Not married",552818283
+Joshua Danjuma,3/17/2025,5/8/2025,3,550,183.3333333,Retail,"Male, 20-30, Not married",599222746
+AbdulMatin Mohammed,3/17/2025,3/17/2025,1,50,50,Retail,"Male, 20-30, Not married",542617632
+Twig,3/18/2025,7/12/2025,4,1000,250,Retail,"Male, 20-30, Not married, CEO blackbox",543033659
+Tina,3/17/2025,3/17/2025,1,50,50,Retail,"Female, 25-35, Not married",203534310
+Eleazer Asenso,5/3/2025,5/3/2025,2,300,150,Retail,"Male, 20-30, Not married",592935308
+Adwoa Siaw,5/4/2025,5/4/2025,1,50,50,Retail,"Female, 10-18, Not married",
+Kingsley,5/5/2025,5/5/2025,4,400,100,Retail,"Male, 20-30, Not married, UK",
+Paul,5/8/2025,5/8/2025,3,150,50,Retail,"Male, 25-35, Not married",
+Jojo Siaw,5/7/2025,5/7/2025,1,100,100,Retail,"Male, below 18, Not married",
+Theophilus Amakye,4/2/2025,4/23/2025,2,300,150,Retail,"Male, 20-30, Not married",531925144
+Prince,4/3/2025,4/24/2025,3,350,116.6666667,Retail,"Male, 20-30, Not married",
+Gladys Marfo,4/2/2025,4/2/2025,2,320,160,Retail,"Female, 20-30, Not married",597640819
+Osei Tutu Prince,5/17/2025,5/17/2025,32,1550,48.4375,Retail,"Male, 20-30, Not married",559154947
+Herbert,4/14/2025,4/14/2025,2,300,150,Retail,"Male, 20-30, Not married",553729657
+Emmanuel Kofi Asante,4/21/2025,4/21/2025,2,100,50,Retail,"Male, 20-30, Not married",
+Diana Asante,4/22/2025,6/11/2025,2,1030,515,Retail,"Female, 20-30, Not married",595903674
+Derrick,4/23/2025,4/23/2025,1,50,50,Retail,"Male, 20-30, Not married",
+Solomon,4/28/2025,5/21/2025,3,350,116.6666667,Retail,"Male, 20-30, Not married",595384212
+Storm,5/19/2025,5/19/2025,1,50,50,Retail,"Male, 20-30, Not married",594007279
+Lamar,5/19/2025,5/19/2025,1,350,350,Retail,"Male, 20-30, Not married",
+Bordom Edwin,5/25/2025,5/25/2025,1,50,50,Retail,"Male, 20-30, Not married",544671142
+Mawuko,5/25/2025,5/25/2025,1,50,50,Retail,"Male, 20-30, Not married",
+Theophelus Opey,5/26/2025,5/26/2025,3,550,183.3333333,Retail,"Male, 20-30, Not married",545702527
+Samuel Sarfo Sarpong,5/27/2025,5/27/2025,1,50,50,Retail,"Male, 20-30, Not married",
+Loshi,5/27/2025,5/27/2025,1,70,70,Retail,"Male, 20-30, Not married",
+(Owner) Paajoe,7/6/2025,7/6/2025,1,250,250,Retail,"Male, 20-30, Not married",
+Bernice,7/6/2025,7/6/2025,6,1170,195,Retail,"Female, 20-30, Not married",
+Ohene Gyan,7/6/2025,7/6/2025,1,100,100,Retail,"Male, 20-30, Not married",532735626
+Derrick Kwesi Owusu,7/9/2025,7/9/2025,3,550,183.3333333,Retail,"Male, 30-40, Not married",548240317
+Ibrahim,7/9/2025,7/9/2025,1,50,50,Retail,"Male, 20-30, Not married",
+(Owner) Kwadwo Siaw,7/24/2025,7/24/2025,1,50,50,Retail,"Male, 20-30, Not married",
+Mr. Silas,7/14/2025,10/3/2025,7,350,50,Retail,"Male, 20-30, Not married",246630215
+Ernest Akwasi Boakye,7/25/2025,7/25/2025,1,50,50,Retail,"Male, 20-30, Not married",
+Gyima,7/30/2025,8/30/2025,7,2850,407.1428571,Retail,"Male, 20-30, Not married",
+Maxwel,7/31/2025,7/31/2025,1,100,100,Retail,"Male, 20-30, Not married",
+Kukujay,8/12/2025,8/20/2025,3,550,183.3333333,Retail,"Male, 30-40, Not married",
+Randy,10/27/2025,10/27/2025,1,300,300,Retail,"Male, 30-40, Not married",
+Philip Yemoah,10/29/2025,10/29/2025,2,1500,750,Retail,"Male, 30-40, Not married",544344305
+Dr. Phil,11/4/2025,11/4/2025,2,500,250,Retail,"Male, 30-40, Not married",207823680
+George Adinkra,12/5/2025,12/5/2025,1,50,50,Retail,"Male, 20-30, Not married",556056154
+Opoku Christian,2/7/2026,2/7/2026,1,50,50,Retail,"Male, 20-30, Not married",
+Anastasia Frimpong Boakye,2/15/2026,2/15/2026,1,50,50,Retail,"Female, 20-30, Not married",
+Nana Anim,5/18/2026,5/18/2026,1,550,550,Retail,"Male, 20-30, Not married",
+Tony,5/31/2026,5/31/2026,2,1500,750,Retail,"Male, 20-30, Not married",
+Christian Boakye Yiadom,8/5/2025,5/20/2026,5,6090,1218,Retail,"Male, 30-40, CEO of pizzaman, Not married",
