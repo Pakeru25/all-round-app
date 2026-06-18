@@ -418,6 +418,11 @@ async function importExpenses(
       warn("expenses: skipped an empty row.");
       continue;
     }
+    // Totals/summary rows have an amount but no category, description, or
+    // expense number (e.g. a running-total row at the bottom of the sheet).
+    if (!input.categoryName && !input.description && !input.expense_number) {
+      continue;
+    }
     if (input.expense_number && (await exists(supabase, "expenses", orgId, "expense_number", input.expense_number))) {
       continue; // idempotent on the document number
     }
