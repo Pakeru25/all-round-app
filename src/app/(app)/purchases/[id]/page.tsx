@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
@@ -49,7 +49,22 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
     .eq("id", id)
     .single();
   const purchase = purchaseData as PurchaseWithRelations | null;
-  if (!purchase) notFound();
+  if (!purchase) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <PageHeader title="Purchase not found" description="This purchase may have been deleted." />
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+          The activity log keeps a permanent record of past actions, so this entry remains even after the
+          purchase itself was removed.
+          <div className="mt-4">
+            <Link href="/purchases" className="font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300">
+              Back to purchases
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const { data: itemsData } = await supabase
     .from("purchase_items")

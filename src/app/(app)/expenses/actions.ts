@@ -53,9 +53,33 @@ export async function deleteExpense(id: string) {
   if (ctx.profile.role !== "owner") redirect("/expenses");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("expenses").delete().eq("id", id);
+  const { data: expData } = await supabase
+    .from("expenses")
+    .select("organization_id, expense_number, amount")
+    .eq("id", id)
+    .single();
+  const expense = expData as
+    | { organization_id: string; expense_number: string | null; amount: number }
+    | null;
 
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) redirect(`/expenses/${id}/edit?error=${encodeURIComponent(error.message)}`);
+
+  if (expense) {
+    const actor = ctx.profile.full_name ?? "Someone";
+    const ref = expense.expense_number ?? "";
+    await supabase.from("activity_log").insert({
+      organization_id: expense.organization_id,
+      user_id: ctx.profile.id,
+      action: "deleted",
+      entity_type: "expense",
+      entity_id: id,
+      description: `${actor} deleted expense ${ref} for GH₵${expense.amount}`.replace(/\s+/g, " ").trim(),
+      metadata: { amount: expense.amount, expense_number: expense.expense_number },
+    });
+  }
+
   revalidatePath("/expenses");
+  revalidatePath("/activity");
   redirect("/expenses");
 }
