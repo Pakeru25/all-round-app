@@ -46,16 +46,14 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
       if (it.category_id) lowByCat.set(it.category_id, (lowByCat.get(it.category_id) ?? 0) + 1);
     }
   }
-  const inventoryChildren: NavChild[] = [
-    { label: "All items", href: "/inventory", count: items.length },
-    ...(lowTotal > 0 ? [{ label: "Low stock", href: "/inventory?filter=low", count: lowTotal, low: true }] : []),
-    ...categories.map((c) => ({
-      label: c.name,
-      href: `/inventory?category=${c.id}`,
-      count: countByCat.get(c.id) ?? 0,
-      low: (lowByCat.get(c.id) ?? 0) > 0,
-    })),
-  ];
+  // Only the (three) material-type categories appear under Inventory. Individual
+  // items (boxes, paper bags, …) are reached by opening a category, not the nav.
+  const inventoryChildren: NavChild[] = categories.map((c) => ({
+    label: c.name,
+    href: `/inventory?category=${c.id}`,
+    count: countByCat.get(c.id) ?? 0,
+    low: (lowByCat.get(c.id) ?? 0) > 0,
+  }));
 
   // --- Expenses: by category ------------------------------------------------
   const expenseChildren: NavChild[] = [

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import type { InventoryItemWithCategory } from "@/types/database";
 
 type Movement = {
@@ -42,13 +42,25 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     .from("inventory_movements")
     .select("id,movement_type,quantity,reason,notes,created_at")
     .eq("inventory_item_id", id)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  const movements = (movData as Movement[] | null) ?? [];
+    .order("created_at", { ascending: false });
+  const allMovements = (movData as Movement[] | null) ?? [];
+  const movements = allMovements.slice(0, 50);
 
   const low = item.reorder_level > 0 && item.quantity_in_stock <= item.reorder_level;
   const stockValue = item.quantity_in_stock * item.cost_price;
   const margin = item.selling_price - item.cost_price;
+
+  // Defective units come from "damage" stock movements; purchase figures come
+  // from "purchase" movements (logged automatically when a purchase is recorded).
+  const defectiveUnits = allMovements
+    .filter((m) => m.reason === "damage")
+    .reduce((sum, m) => sum + Number(m.quantity), 0);
+  const purchaseMovements = allMovements.filter((m) => m.reason === "purchase");
+  const totalPurchased = purchaseMovements.reduce((sum, m) => sum + Number(m.quantity), 0);
+  // allMovements is sorted newest-first, so the first/last purchase entries are
+  // the most/least recent purchase dates respectively.
+  const lastPurchasedAt = purchaseMovements[0]?.created_at ?? null;
+  const firstPurchasedAt = purchaseMovements[purchaseMovements.length - 1]?.created_at ?? null;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -58,11 +70,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         action={canWrite ? { href: `/inventory/${item.id}/edit`, label: "Edit" } : undefined}
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard
-          label="In stock"
+          label="Available"
           value={`${item.quantity_in_stock} ${item.unit}`}
           hint={low ? `⚠ at/below reorder level (${item.reorder_level})` : `Reorder at ${item.reorder_level}`}
+        />
+        <StatCard
+          label="Defective"
+          value={`${defectiveUnits} ${item.unit}`}
+          hint={defectiveUnits > 0 ? "Total recorded as damaged" : "None recorded"}
+        />
+        <StatCard
+          label="Last purchased"
+          value={lastPurchasedAt ? formatDate(lastPurchasedAt) : "—"}
+          hint={totalPurchased > 0 ? `${totalPurchased} ${item.unit} purchased in total` : "No purchases recorded"}
         />
         <StatCard label="Stock value (at cost)" value={formatCurrency(stockValue)} />
         <StatCard label="Selling price" value={formatCurrency(item.selling_price)} />
@@ -78,6 +100,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <Row label="Cost price" value={formatCurrency(item.cost_price)} />
             <Row label="Reorder level" value={String(item.reorder_level)} />
             <Row label="Status" value={item.is_active ? "Active" : "Inactive"} />
+            <Row label="Total purchased" value={`${totalPurchased} ${item.unit}`} />
+            <Row label="First purchased" value={firstPurchasedAt ? formatDate(firstPurchasedAt) : "—"} />
+            <Row label="Added on" value={formatDate(item.created_at)} />
           </dl>
           {item.description ? (
             <p className="mt-3 border-t border-zinc-100 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
