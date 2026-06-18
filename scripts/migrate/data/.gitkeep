@@ -1,0 +1,2 @@
+# Drop your exported Google Sheets CSVs here (see ../README.md).
+# *.csv files in this folder are gitignored so business data is never committed.

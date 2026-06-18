@@ -8,6 +8,51 @@ import { str, strOrNull, num, intOrZero } from "@/lib/forms";
 
 const CAN_WRITE = ["owner", "manager"];
 
+/**
+ * Record damaged/defective units for an item. Writes a `damage` stock movement
+ * (the single source of truth for the defective totals shown on item/category
+ * pages) and reduces available stock by the same amount.
+ */
+export async function logDamage(itemId: string, formData: FormData) {
+  const ctx = await getSessionContext();
+  if (!ctx) redirect("/login");
+  const back = `/inventory/${itemId}`;
+  if (!CAN_WRITE.includes(ctx.profile.role)) redirect(back);
+
+  const quantity = num(formData.get("quantity"));
+  if (quantity <= 0) redirect(`${back}?error=${encodeURIComponent("Enter a quantity greater than zero.")}`);
+
+  const supabase = await createClient();
+  const { data: item } = await supabase
+    .from("inventory_items")
+    .select("quantity_in_stock")
+    .eq("id", itemId)
+    .single();
+  if (!item) redirect(`${back}?error=${encodeURIComponent("Item not found.")}`);
+
+  const { error: movErr } = await supabase.from("inventory_movements").insert({
+    organization_id: ctx.profile.organization_id,
+    inventory_item_id: itemId,
+    movement_type: "out",
+    quantity,
+    reason: "damage",
+    notes: strOrNull(formData.get("notes")),
+    recorded_by: ctx.profile.id,
+  });
+  if (movErr) redirect(`${back}?error=${encodeURIComponent(movErr.message)}`);
+
+  const next = Number(item.quantity_in_stock) - quantity;
+  const { error: updErr } = await supabase
+    .from("inventory_items")
+    .update({ quantity_in_stock: next })
+    .eq("id", itemId);
+  if (updErr) redirect(`${back}?error=${encodeURIComponent(updErr.message)}`);
+
+  revalidatePath(back);
+  revalidatePath("/inventory");
+  redirect(back);
+}
+
 function payloadFrom(formData: FormData) {
   return {
     name: str(formData.get("name")),

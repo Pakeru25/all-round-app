@@ -34,6 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
+# migration source data — real business data exported from Google Sheets
+/scripts/migrate/data/*.csv
+# generated import SQL — contains real business data, keep local-only
+/scripts/migrate/import.sql
+
 # vercel
 .vercel
 

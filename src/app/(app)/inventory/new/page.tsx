@@ -8,10 +8,10 @@ import { createItem } from "../actions";
 export default async function NewItemPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; category?: string }>;
 }) {
   await requireRole(["owner", "manager"]);
-  const { error } = await searchParams;
+  const { error, category } = await searchParams;
 
   const supabase = await createClient();
   const { data } = await supabase.from("inventory_categories").select("*").order("name");
@@ -20,7 +20,13 @@ export default async function NewItemPage({
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Add item" />
-      <ItemForm action={createItem} categories={categories} submitLabel="Create item" error={error} />
+      <ItemForm
+        action={createItem}
+        categories={categories}
+        defaults={category ? { category_id: category } : undefined}
+        submitLabel="Create item"
+        error={error}
+      />
     </div>
   );
 }
