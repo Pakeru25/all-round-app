@@ -1,8 +1,13 @@
 -- ==========================================================
--- All Round App — full two-year data import
--- Generated 2026-06-18T15:13:48.013Z
--- Paste the entire block into Supabase SQL Editor and run.
+-- All Round App — RESET + full two-year data import
+-- Generated 2026-06-18T15:25:22.880Z
+-- Paste the entire block into the Supabase SQL Editor and run once.
 -- Requires 0006_admin.sql to have been applied first.
+--
+-- This wipes ALL prior sales/customers/expenses/inventory for the org and
+-- reloads strictly from the CSVs, so customer LTV is recomputed cleanly with
+-- no doubling. Safe to re-run: it always lands on the same clean state.
+-- Untouched: organizations, profiles, employees, suppliers, auth.users.
 -- ==========================================================
 
 DO $$
@@ -11,9 +16,23 @@ DECLARE
   v_sale_id uuid;
 BEGIN
   SELECT id INTO v_org_id FROM organizations ORDER BY created_at LIMIT 1;
+
+  -- ── WIPE (FK-safe order; children cascade from sales/purchases) ──────
+  DELETE FROM sales               WHERE organization_id = v_org_id;
+  DELETE FROM purchases           WHERE organization_id = v_org_id;
+  DELETE FROM expenses            WHERE organization_id = v_org_id;
+  DELETE FROM inventory_movements WHERE organization_id = v_org_id;
+  DELETE FROM inventory_items     WHERE organization_id = v_org_id;
+  DELETE FROM customers           WHERE organization_id = v_org_id;
+  DELETE FROM expense_categories  WHERE organization_id = v_org_id;
+  DELETE FROM inventory_categories WHERE organization_id = v_org_id;
+  DELETE FROM activity_log        WHERE organization_id = v_org_id;
+  DELETE FROM notifications       WHERE organization_id = v_org_id;
+  UPDATE doc_counters SET last_value = 0 WHERE organization_id = v_org_id;
+
   PERFORM set_transaction_triggers(false);
 
-  -- ── Expense categories (16) ────────────────────────────
+  -- ── Expense categories (16) ──
   INSERT INTO expense_categories (id, organization_id, name, created_at)
   SELECT gen_random_uuid(), v_org_id, 'Photography', now()
   WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE organization_id = v_org_id AND lower(name) = lower('Photography'));
@@ -63,7 +82,7 @@ BEGIN
   SELECT gen_random_uuid(), v_org_id, 'Office', now()
   WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE organization_id = v_org_id AND lower(name) = lower('Office'));
 
-  -- ── Customers (49) ──────────────────────────────────────────
+  -- ── Customers (49) ──
   INSERT INTO customers (id, organization_id, name, phone, email, address, notes, preferences, created_at, updated_at)
   SELECT gen_random_uuid(), v_org_id, 'Abeiku', '552818283', NULL, NULL, 'Male, 30-40, COO of pizzaman, Not married', 'Retail', now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku'));
@@ -212,7 +231,7 @@ BEGIN
   SELECT gen_random_uuid(), v_org_id, 'Prince Edison', NULL, NULL, NULL, NULL, NULL, now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Prince Edison'));
 
-  -- ── Inventory items (26 derived from sales) ──────────────────────
+  -- ── Inventory items (26 derived from sales) ──
   INSERT INTO inventory_items (id, organization_id, name, sku, selling_price, cost_price, quantity_in_stock, unit, created_at, updated_at)
   SELECT gen_random_uuid(), v_org_id, 'T-shirt', 'TSH-WH-L', 250, 0, 0, 'pieces', now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L');
@@ -292,397 +311,865 @@ BEGIN
   SELECT gen_random_uuid(), v_org_id, 'Other', 'OTHER', 840, 0, 0, 'pieces', now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM inventory_items WHERE organization_id = v_org_id AND sku = 'OTHER');
 
-  -- ── Numbered sales (103) ─────────────────────────────────────────
+  -- ── Numbered sales (103) ──
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku') LIMIT 1),
     '2025-1', '2025-03-17', 500, 400, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-1');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-1' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-1');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku') LIMIT 1),
     '2025-2', '2025-03-17', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-2');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-2' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-2');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Joshua Danjuma') LIMIT 1),
     '2025-3', '2025-03-17', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-3');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-3' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-C-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-3');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Joshua Danjuma') LIMIT 1),
     '2025-4', '2025-03-17', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-4');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-4' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-4');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('AbdulMatin Mohammed') LIMIT 1),
     '2025-5', '2025-03-17', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-5');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-5' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-5');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Tina') LIMIT 1),
     '2025-7', '2025-03-17', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-7');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-7' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-7');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Twig') LIMIT 1),
     '2025-6', '2025-03-18', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-6');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-6' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-6');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Theophilus Amakye') LIMIT 1),
     '2025-17', '2025-04-02', 150, 0, 150, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-17');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-17' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    3, 50, 150
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-17');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gladys Marfo') LIMIT 1),
     '2025-20', '2025-04-02', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-20');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-20' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-20');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gladys Marfo') LIMIT 1),
     '2025-21', '2025-04-02', 70, 0, 70, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-21');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-21' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
+    1, 70, 70
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-21');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Prince') LIMIT 1),
     '2025-18', '2025-04-03', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-18');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-18' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-18');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Prince') LIMIT 1),
     '2025-19', '2025-04-03', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-19');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-19' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-19');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Herbert') LIMIT 1),
     '2025-23', '2025-04-14', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-23');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-23' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-23');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Herbert') LIMIT 1),
     '2025-24', '2025-04-14', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-24');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-24' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-24');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Emmanuel Kofi Asante') LIMIT 1),
     '2025-26', '2025-04-21', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-26');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-26' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-26');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Diana Asante') LIMIT 1),
     '2025-28', '2025-04-22', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-28');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-28' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-28');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Diana Asante') LIMIT 1),
     '2025-29', '2025-04-22', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-29');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-29' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-29');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Theophilus Amakye') LIMIT 1),
     '2025-25', '2025-04-23', 150, 0, 150, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-25');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-25' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    3, 50, 150
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-25');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Derrick') LIMIT 1),
     '2025-30', '2025-04-23', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-30');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-30' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-30');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Twig') LIMIT 1),
     '2025-27', '2025-04-25', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-27');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-27' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-27');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Solomon') LIMIT 1),
     '2025-31', '2025-04-28', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-31');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-31' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-31');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Eleazer Asenso') LIMIT 1),
     '2025-8', '2025-05-03', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-8');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-8' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-8');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Eleazer Asenso') LIMIT 1),
     '2025-9', '2025-05-03', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-9');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-9' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-9');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Adwoa Siaw') LIMIT 1),
     '2025-10', '2025-05-04', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-10');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-10' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-10');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Kingsley') LIMIT 1),
     '2025-11', '2025-05-05', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-11');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-11' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-11');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Kingsley') LIMIT 1),
     '2025-12', '2025-05-05', 150, 0, 150, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-12');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-12' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    3, 50, 150
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-12');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Paul') LIMIT 1),
     '2025-13', '2025-05-06', 150, 0, 150, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-13');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-13' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    3, 50, 150
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-13');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Jojo Siaw') LIMIT 1),
     '2025-14', '2025-05-07', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-14');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-14' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-14');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Joshua Danjuma') LIMIT 1),
     '2025-15', '2025-05-08', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-15');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-15' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-B-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-15');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku') LIMIT 1),
     '2025-16', '2025-05-09', 1000, 0, 1000, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-16');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-16' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L,S-S' LIMIT 1),
+    2, 500, 1000
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-16');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Osei Tutu Prince') LIMIT 1),
     '2025-32', '2025-05-17', 500, -50, 550, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-32');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-32' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    10, 50, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-32');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Storm') LIMIT 1),
     '2025-33', '2025-05-19', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-33');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-33' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-33');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Lamar') LIMIT 1),
     '2025-34', '2025-05-19', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-34');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-34' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-34');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Lamar') LIMIT 1),
     '2025-35', '2025-05-19', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-35');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-35' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-35');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Solomon') LIMIT 1),
     '2025-36', '2025-05-21', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-36');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-36' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-36');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Solomon') LIMIT 1),
     '2025-37', '2025-05-21', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-37');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-37' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-37');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Bordom Edwin') LIMIT 1),
     '2025-38', '2025-05-25', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-38');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-38' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-38');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Mawuko') LIMIT 1),
     '2025-39', '2025-05-25', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-39');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-39' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-39');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Theophelus Opey') LIMIT 1),
     '2025-40', '2025-05-26', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-40');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-40' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-40');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Theophelus Opey') LIMIT 1),
     '2025-41', '2025-05-26', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-41');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-41' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L,TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-41');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Samuel Sarfo Sarpong') LIMIT 1),
     '2025-42', '2025-05-27', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-42');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-42' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-42');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Loshi') LIMIT 1),
     '2025-43', '2025-05-27', 70, 0, 70, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-43');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-43' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
+    1, 70, 70
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-43');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Diana Asante') LIMIT 1),
     '2025-44', '2025-06-11', 500, -20, 520, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-44');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-44' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-44');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Osei Tutu Prince') LIMIT 1),
     '2025-47', '2025-06-15', 1000, 0, 1000, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-47');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-47' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    20, 50, 1000
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-47');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku') LIMIT 1),
     '2025-50', '2025-06-19', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-50');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-50' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'GYM-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-50');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Osei Tutu Prince') LIMIT 1),
     '2025-22', '2025-07-04', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-22');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-22' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-22');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Bernice') LIMIT 1),
     '2025-45', '2025-07-06', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-45');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-45' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-45');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Bernice') LIMIT 1),
     '2025-46', '2025-07-06', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-46');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-46' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C_B&C' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-46');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Bernice') LIMIT 1),
     '2025-48', '2025-07-06', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-48');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-48' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-S' LIMIT 1),
+    1, 500, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-48');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Bernice') LIMIT 1),
     '2025-49', '2025-07-06', 70, 0, 70, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-49');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-49' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
+    1, 70, 70
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-49');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Ohene Gyan') LIMIT 1),
     '2025-51', '2025-07-06', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-51');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-51' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-51');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('(Owner) Paajoe') LIMIT 1),
     '2025-52', '2025-07-06', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-52');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-52' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-52');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Ibrahim') LIMIT 1),
     '2025-53', '2025-07-09', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-53');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-53' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-53');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Derrick Kwesi Owusu') LIMIT 1),
     '2025-54', '2025-07-09', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-54');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-54' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-54');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Derrick Kwesi Owusu') LIMIT 1),
     '2025-55', '2025-07-09', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-55');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-55' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-T B' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-55');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Diana Asante') LIMIT 1),
     '2025-56', '2025-07-10', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-56');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-56' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-56');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Twig') LIMIT 1),
     '2025-57', '2025-07-12', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-57');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-57' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-57');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Abeiku') LIMIT 1),
     '2025-58', '2025-07-13', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-58');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-58' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-58');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Mr. Silas') LIMIT 1),
     '2025-59', '2025-07-14', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-59');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-59' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C&B' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-59');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('(Owner) Kwadwo Siaw') LIMIT 1),
     '2025-60', '2025-07-24', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-60');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-60' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-60');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Ernest Akwasi Boakye') LIMIT 1),
     '2025-61', '2025-07-25', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-61');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-61' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-61');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gyima') LIMIT 1),
     '2025-62', '2025-07-30', 1000, 0, 1000, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-62');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-62' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L,S-S' LIMIT 1),
+    2, 500, 1000
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-62');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gyima') LIMIT 1),
     '2025-63', '2025-07-30', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-63');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-63' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L, TSH-BK-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-63');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gyima') LIMIT 1),
     '2025-64', '2025-07-30', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-64');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-64' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-64');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Maxwel') LIMIT 1),
     '2025-65', '2025-07-31', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-65');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-65' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
+    1, 100, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-65');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Chris B') LIMIT 1),
     '2025-66', '2025-08-05', 500, 100, 400, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-66');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-66' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-66');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Kukujay') LIMIT 1),
     '2025-67', '2025-08-12', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-67');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-67' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-67');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Kukujay') LIMIT 1),
     '2025-68', '2025-08-12', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-68');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-68' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-68');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gyima') LIMIT 1),
     '2025-69', '2025-08-30', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-69');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-69' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-69');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Gyima') LIMIT 1),
     '2025-70', '2025-08-30', 1000, 0, 1000, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-70');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-70' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-Y,S-S' LIMIT 1),
+    2, 500, 1000
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-70');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Kukujay') LIMIT 1),
     '2025-71', '2025-08-31', 250, 0, 250, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-71');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-71' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
+    1, 250, 250
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-71');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Mr. Silas') LIMIT 1),
     '2025-72', '2025-10-03', 100, 0, 100, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-72');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-72' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    2, 50, 100
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-72');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Randy') LIMIT 1),
     '2025-73', '2025-10-27', 300, 0, 300, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-73');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-73' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-XXL' LIMIT 1),
+    1, 300, 300
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-73');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Philip Yemoah') LIMIT 1),
     '2025-74', '2025-10-29', 1000, 0, 1000, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-74');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-74' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L' LIMIT 1),
+    1, 1000, 1000
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-74');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Philip Yemoah') LIMIT 1),
     '2025-75', '2025-10-29', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-75');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-75' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-75');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Dr. Phil') LIMIT 1),
     '2025-76', '2025-11-04', 500, 0, 500, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-76');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-76' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L, TSH-BK-L' LIMIT 1),
+    2, 250, 500
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-76');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Mr. Silas') LIMIT 1),
     '2025-77', '2025-12-04', 150, 0, 150, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-77');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-77' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
+    3, 50, 150
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-77');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('George Adinkra') LIMIT 1),
     '2025-78', '2025-12-05', 50, 0, 50, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-78');
+  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
+  SELECT gen_random_uuid(),
+    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-78' LIMIT 1),
+    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
+    1, 50, 50
+  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-78');
   INSERT INTO sales (id, organization_id, customer_id, sale_number, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   SELECT gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower(NULL) LIMIT 1),
@@ -809,477 +1296,7 @@ BEGIN
     '2025-103', '2026-06-18', 0, 0, 0, 'cash', 'paid', NULL, now()
   WHERE NOT EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-103');
 
-  -- ── Sale items for numbered sales ────────────────────────────────────
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-1' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-1');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-2' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-2');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-3' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-C-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-3');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-4' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-4');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-5' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-5');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-7' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-7');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-6' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-6');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-17' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    3, 50, 150
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-17');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-20' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-20');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-21' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
-    1, 70, 70
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-21');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-18' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-18');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-19' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-19');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-23' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-23');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-24' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-24');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-26' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-26');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-28' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-28');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-29' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-29');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-25' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    3, 50, 150
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-25');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-30' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-30');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-27' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-27');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-31' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-31');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-8' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-8');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-9' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-9');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-10' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-10');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-11' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-11');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-12' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    3, 50, 150
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-12');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-13' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    3, 50, 150
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-13');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-14' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-14');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-15' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-B-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-15');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-16' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L,S-S' LIMIT 1),
-    2, 500, 1000
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-16');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-32' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    10, 50, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-32');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-33' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-33');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-34' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-34');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-35' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-35');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-36' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-36');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-37' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-37');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-38' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-38');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-39' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-39');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-40' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-40');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-41' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L,TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-41');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-42' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-42');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-43' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
-    1, 70, 70
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-43');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-44' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-44');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-47' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    20, 50, 1000
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-47');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-50' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'GYM-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-50');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-22' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-22');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-45' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-45');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-46' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C_B&C' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-46');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-48' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-S' LIMIT 1),
-    1, 500, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-48');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-49' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
-    1, 70, 70
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-49');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-51' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C,CB' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-51');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-52' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-52');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-53' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-53');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-54' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-54');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-55' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-T B' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-55');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-56' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-56');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-57' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-57');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-58' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-58');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-59' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C&B' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-59');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-60' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-C' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-60');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-61' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-61');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-62' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L,S-S' LIMIT 1),
-    2, 500, 1000
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-62');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-63' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L, TSH-BK-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-63');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-64' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-64');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-65' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'T-B' LIMIT 1),
-    1, 100, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-65');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-66' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-66');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-67' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-67');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-68' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-68');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-69' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-69');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-70' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-Y,S-S' LIMIT 1),
-    2, 500, 1000
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-70');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-71' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-BK-L' LIMIT 1),
-    1, 250, 250
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-71');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-72' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    2, 50, 100
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-72');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-73' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-XXL' LIMIT 1),
-    1, 300, 300
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-73');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-74' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'S-L' LIMIT 1),
-    1, 1000, 1000
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-74');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-75' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-75');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-76' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'TSH-WH-L, TSH-BK-L' LIMIT 1),
-    2, 250, 500
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-76');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-77' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B, C-C' LIMIT 1),
-    3, 50, 150
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-77');
-  INSERT INTO sale_items (id, sale_id, inventory_item_id, quantity, unit_price, total_price)
-  SELECT gen_random_uuid(),
-    (SELECT id FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-78' LIMIT 1),
-    (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'C-B' LIMIT 1),
-    1, 50, 50
-  WHERE EXISTS (SELECT 1 FROM sales WHERE organization_id = v_org_id AND sale_number = '2025-78');
-
-  -- ── Numberless 2026 sales (12) — each gets an auto SAL- number ──────
+  -- ── Numberless 2026 sales (12) — auto SAL- numbers ──
   INSERT INTO sales (id, organization_id, customer_id, sale_date, subtotal, discount, total_amount, payment_method, payment_status, notes, created_at)
   VALUES (gen_random_uuid(), v_org_id,
     (SELECT id FROM customers WHERE organization_id = v_org_id AND lower(name) = lower('Opoku Christian') LIMIT 1),
@@ -1389,7 +1406,7 @@ BEGIN
     (SELECT id FROM inventory_items WHERE organization_id = v_org_id AND sku = 'OTHER' LIMIT 1),
     1, 840, 840);
 
-  -- ── Expenses (407) ────────────────────────────────────────────────
+  -- ── Expenses (407) ──
   INSERT INTO expenses (id, organization_id, category_id, amount, description, expense_date, created_at)
   VALUES (gen_random_uuid(), v_org_id, (SELECT id FROM expense_categories WHERE organization_id = v_org_id AND lower(name) = lower('Photography') LIMIT 1), 200, 'Nyamedo''s Issue — Vendor: Nyamedo', '2025-07-04', now());
   INSERT INTO expenses (id, organization_id, category_id, amount, description, expense_date, created_at)
