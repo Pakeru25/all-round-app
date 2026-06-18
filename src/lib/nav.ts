@@ -17,7 +17,7 @@ type ItemRow = {
 
 /**
  * Builds the role-filtered sidebar tree, attaching live groupings + counts to
- * Inventory (by category + low stock), Expenses (by category) and Customers
+ * Inventory (All + the three stock types), Expenses (by category) and Customers
  * (by value tier). All queries are RLS-scoped to the caller's organization.
  */
 export async function getNavSections(profile: Profile): Promise<NavSection[]> {
@@ -46,6 +46,9 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
       lowByType.set(it.inventory_type, (lowByType.get(it.inventory_type) ?? 0) + 1);
     }
   }
+  // Exactly four entries expand under Inventory: All + the three stock types.
+  // Categories are NOT in the sidebar — they live on the type page (right side),
+  // and clicking a category there reveals its individual items.
   const inventoryChildren: NavChild[] = [
     { label: "All", href: "/inventory/all", count: items.length },
     ...INVENTORY_TYPES.map((t) => ({
@@ -54,7 +57,6 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
       count: countByType.get(t.value) ?? 0,
       low: (lowByType.get(t.value) ?? 0) > 0,
     })),
-    ...(lowTotal > 0 ? [{ label: "Low stock", href: "/inventory/low", count: lowTotal, low: true }] : []),
   ];
 
   // --- Expenses: by category ------------------------------------------------

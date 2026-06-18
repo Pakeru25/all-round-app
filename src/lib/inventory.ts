@@ -10,8 +10,8 @@ import type { InventoryType } from "@/types/database";
 
 export const INVENTORY_TYPES: { value: InventoryType; slug: string; label: string }[] = [
   { value: "raw_material", slug: "raw_material", label: "Raw materials" },
-  { value: "finished_product", slug: "finished_product", label: "Finished products" },
   { value: "packaging_material", slug: "packaging_material", label: "Packaging materials" },
+  { value: "finished_product", slug: "finished_product", label: "Finished products" },
 ];
 
 export const INVENTORY_TYPE_LABELS: Record<InventoryType, string> = {
