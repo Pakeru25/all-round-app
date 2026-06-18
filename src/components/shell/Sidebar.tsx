@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -58,11 +57,6 @@ export function Sidebar({ role, sections }: { role: Role; sections: NavSection[]
   const currentQuery = searchParams.toString();
 
   const sectionActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
-  const activeHref = sections.find((s) => sectionActive(s.href))?.href ?? null;
-  const [open, setOpen] = useState<string[]>(activeHref ? [activeHref] : []);
-  const toggle = (href: string) =>
-    setOpen((cur) => (cur.includes(href) ? cur.filter((h) => h !== href) : [...cur, href]));
-
   const childActive = (href: string) => {
     const [path, query] = href.split("?");
     if (pathname !== path) return false;
@@ -95,8 +89,6 @@ export function Sidebar({ role, sections }: { role: Role; sections: NavSection[]
             );
           }
 
-          const expanded = open.includes(section.href) || active;
-
           return (
             <div key={section.href} className="group">
               <div className={rowClass(active)}>
@@ -109,18 +101,11 @@ export function Sidebar({ role, sections }: { role: Role; sections: NavSection[]
                     {section.badge}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  aria-label={`Toggle ${section.label}`}
-                  onClick={() => toggle(section.href)}
-                  className="rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
-                >
-                  <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                </button>
+                <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400 transition-transform md:group-hover:rotate-180" />
               </div>
 
-              {/* Expanded (clicked or active) is always shown; otherwise reveal on hover on desktop. */}
-              <ul className={`${expanded ? "block" : "hidden md:group-hover:block"} mt-1 space-y-0.5 pl-9 pr-1`}>
+              {/* Children reveal solely on hover (desktop); they collapse when not hovered. */}
+              <ul className="hidden md:group-hover:block mt-1 space-y-0.5 pl-9 pr-1">
                 {section.children!.map((child) => (
                   <li key={child.href}>
                     <Link href={child.href} className={childClass(childActive(child.href))}>
