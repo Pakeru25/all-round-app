@@ -79,6 +79,24 @@ export interface CustomerStats extends Customer {
   first_purchase: string | null;
 }
 
+export type EmployeeStatus = "active" | "inactive";
+
+export interface Employee {
+  id: string;
+  organization_id: string;
+  full_name: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  salary: number | null;
+  hire_date: string | null;
+  status: EmployeeStatus;
+  linked_user_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   organization_id: string;
