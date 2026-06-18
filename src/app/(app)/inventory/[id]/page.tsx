@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { INVENTORY_TYPE_LABELS } from "@/lib/inventory";
 import type { InventoryItemWithCategory } from "@/types/database";
 
 type Movement = {
@@ -50,11 +52,31 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const stockValue = item.quantity_in_stock * item.cost_price;
   const margin = item.selling_price - item.cost_price;
 
+  const typeLabel = INVENTORY_TYPE_LABELS[item.inventory_type];
+  const categoryName = item.inventory_categories?.name ?? "Uncategorised";
+  const categorySegment = item.category_id ?? "uncategorised";
+
   return (
     <div className="mx-auto max-w-5xl">
+      <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm text-zinc-500">
+        <Link href="/inventory" className="underline-offset-2 hover:underline">
+          Inventory
+        </Link>
+        <span>/</span>
+        <Link href={`/inventory/type/${item.inventory_type}`} className="underline-offset-2 hover:underline">
+          {typeLabel}
+        </Link>
+        <span>/</span>
+        <Link
+          href={`/inventory/type/${item.inventory_type}/${categorySegment}`}
+          className="underline-offset-2 hover:underline"
+        >
+          {categoryName}
+        </Link>
+      </nav>
       <PageHeader
         title={item.name}
-        description={item.inventory_categories?.name ?? "Uncategorised"}
+        description={`${typeLabel} · ${categoryName}`}
         action={canWrite ? { href: `/inventory/${item.id}/edit`, label: "Edit" } : undefined}
       />
 
@@ -74,6 +96,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Details</h2>
           <dl className="space-y-2 text-sm">
             <Row label="SKU" value={item.sku ?? "—"} />
+            <Row label="Type" value={typeLabel} />
             <Row label="Unit" value={item.unit} />
             <Row label="Cost price" value={formatCurrency(item.cost_price)} />
             <Row label="Reorder level" value={String(item.reorder_level)} />

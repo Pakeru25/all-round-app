@@ -3,12 +3,14 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { navItemsForRole } from "@/lib/auth/roles";
 import type { NavChild, NavSection } from "@/lib/auth/roles";
+import { INVENTORY_TYPES } from "@/lib/inventory";
 import { TIER_LABELS, TIER_ORDER, tierForSpend } from "@/lib/segments";
-import type { Profile } from "@/types/database";
+import type { InventoryType, Profile } from "@/types/database";
 
 type ItemRow = {
   id: string;
   category_id: string | null;
+  inventory_type: InventoryType;
   quantity_in_stock: number;
   reorder_level: number;
 };
@@ -22,39 +24,36 @@ export async function getNavSections(profile: Profile): Promise<NavSection[]> {
   const base = navItemsForRole(profile.role);
   const supabase = await createClient();
 
-  const [catsRes, itemsRes, expCatsRes, custRes] = await Promise.all([
-    supabase.from("inventory_categories").select("id,name").order("name"),
-    supabase.from("inventory_items").select("id,category_id,quantity_in_stock,reorder_level"),
+  const [itemsRes, expCatsRes, custRes] = await Promise.all([
+    supabase.from("inventory_items").select("id,category_id,inventory_type,quantity_in_stock,reorder_level"),
     supabase.from("expense_categories").select("id,name").order("name"),
     supabase.from("customer_stats").select("total_spent"),
   ]);
 
-  const categories = (catsRes.data as { id: string; name: string }[] | null) ?? [];
   const items = (itemsRes.data as ItemRow[] | null) ?? [];
   const expenseCats = (expCatsRes.data as { id: string; name: string }[] | null) ?? [];
   const customerStats = (custRes.data as { total_spent: number }[] | null) ?? [];
 
-  // --- Inventory: per-category counts + low stock ---------------------------
-  const countByCat = new Map<string, number>();
-  const lowByCat = new Map<string, number>();
+  // --- Inventory: per-type counts + low stock -------------------------------
+  const countByType = new Map<InventoryType, number>();
+  const lowByType = new Map<InventoryType, number>();
   let lowTotal = 0;
   for (const it of items) {
-    if (it.category_id) countByCat.set(it.category_id, (countByCat.get(it.category_id) ?? 0) + 1);
+    countByType.set(it.inventory_type, (countByType.get(it.inventory_type) ?? 0) + 1);
     const isLow = it.reorder_level > 0 && Number(it.quantity_in_stock) <= it.reorder_level;
     if (isLow) {
       lowTotal += 1;
-      if (it.category_id) lowByCat.set(it.category_id, (lowByCat.get(it.category_id) ?? 0) + 1);
+      lowByType.set(it.inventory_type, (lowByType.get(it.inventory_type) ?? 0) + 1);
     }
   }
   const inventoryChildren: NavChild[] = [
-    { label: "All items", href: "/inventory", count: items.length },
-    ...(lowTotal > 0 ? [{ label: "Low stock", href: "/inventory?filter=low", count: lowTotal, low: true }] : []),
-    ...categories.map((c) => ({
-      label: c.name,
-      href: `/inventory?category=${c.id}`,
-      count: countByCat.get(c.id) ?? 0,
-      low: (lowByCat.get(c.id) ?? 0) > 0,
+    ...INVENTORY_TYPES.map((t) => ({
+      label: t.label,
+      href: `/inventory/type/${t.slug}`,
+      count: countByType.get(t.value) ?? 0,
+      low: (lowByType.get(t.value) ?? 0) > 0,
     })),
+    ...(lowTotal > 0 ? [{ label: "Low stock", href: "/inventory/low", count: lowTotal, low: true }] : []),
   ];
 
   // --- Expenses: by category ------------------------------------------------

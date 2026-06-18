@@ -27,6 +27,8 @@ export interface Organization {
   created_at: string;
 }
 
+export type InventoryType = "raw_material" | "finished_product" | "packaging_material";
+
 export interface InventoryCategory {
   id: string;
   organization_id: string;
@@ -39,6 +41,7 @@ export interface InventoryItem {
   id: string;
   organization_id: string;
   category_id: string | null;
+  inventory_type: InventoryType;
   name: string;
   sku: string | null;
   description: string | null;

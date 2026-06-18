@@ -5,15 +5,20 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth/session";
 import { str, strOrNull, num, intOrZero } from "@/lib/forms";
+import { isInventoryType } from "@/lib/inventory";
+import type { InventoryType } from "@/types/database";
 
 const CAN_WRITE = ["owner", "manager"];
 
 function payloadFrom(formData: FormData) {
+  const rawType = str(formData.get("inventory_type"));
+  const inventory_type: InventoryType = isInventoryType(rawType) ? rawType : "raw_material";
   return {
     name: str(formData.get("name")),
     sku: strOrNull(formData.get("sku")),
     description: strOrNull(formData.get("description")),
     category_id: strOrNull(formData.get("category_id")),
+    inventory_type,
     unit: str(formData.get("unit")) || "pieces",
     quantity_in_stock: num(formData.get("quantity_in_stock")),
     cost_price: num(formData.get("cost_price")),
