@@ -26,7 +26,7 @@ create type payment_status    as enum ('paid', 'partial', 'unpaid');
 create type employee_status   as enum ('active', 'inactive');
 create type activity_action   as enum ('created', 'updated', 'deleted');
 create type notification_type as enum ('sale_created', 'expense_logged', 'purchase_created', 'inventory_low', 'inventory_adjusted');
-create type inventory_type    as enum ('raw_material', 'packaging', 'finished_product');
+create type inventory_type    as enum ('raw_material', 'packaging_material', 'finished_product');
 
 -- ---- Organizations ----------------------------------------------------------
 create table organizations (
@@ -64,6 +64,7 @@ create table inventory_items (
   id                uuid primary key default gen_random_uuid(),
   organization_id   uuid not null references organizations (id) on delete cascade,
   category_id       uuid references inventory_categories (id) on delete set null,
+  inventory_type    inventory_type,
   name              text not null,
   sku               text,
   description       text,

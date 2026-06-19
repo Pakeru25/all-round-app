@@ -8,13 +8,13 @@ import type { InventoryType } from "@/types/database";
 /** Fixed left-to-right order the three groups are shown in. */
 export const INVENTORY_TYPE_ORDER: InventoryType[] = [
   "raw_material",
-  "packaging",
+  "packaging_material",
   "finished_product",
 ];
 
 /** Human-facing labels for each group. */
 export const INVENTORY_TYPE_LABELS: Record<InventoryType, string> = {
   raw_material: "Raw Materials",
-  packaging: "Packaging Material",
+  packaging_material: "Packaging Material",
   finished_product: "Finished Products",
 };

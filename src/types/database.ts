@@ -28,7 +28,7 @@ export interface Organization {
 }
 
 /** The three top-level groups every category belongs to. */
-export type InventoryType = "raw_material" | "packaging" | "finished_product";
+export type InventoryType = "raw_material" | "packaging_material" | "finished_product";
 
 export interface InventoryCategory {
   id: string;
