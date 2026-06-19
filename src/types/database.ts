@@ -27,11 +27,26 @@ export interface Organization {
   created_at: string;
 }
 
+export type MaterialType = "raw_material" | "packaging_material" | "finished_product";
+
+export const MATERIAL_TYPE_LABELS: Record<MaterialType, string> = {
+  raw_material: "Raw Materials",
+  packaging_material: "Packaging Material",
+  finished_product: "Finished Products",
+};
+
+export const MATERIAL_TYPES: MaterialType[] = [
+  "raw_material",
+  "packaging_material",
+  "finished_product",
+];
+
 export interface InventoryCategory {
   id: string;
   organization_id: string;
   name: string;
   description: string | null;
+  material_type: MaterialType | null;
   created_at: string;
 }
 
