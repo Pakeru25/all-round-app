@@ -71,6 +71,20 @@ export interface Customer {
   updated_at: string;
 }
 
+export interface Supplier {
+  id: string;
+  organization_id: string;
+  name: string;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  amount_spent: number;
+  order_count: number;
+  created_at: string;
+}
+
 /** A customer row enriched with live figures from the `customer_stats` view. */
 export interface CustomerStats extends Customer {
   total_spent: number;
