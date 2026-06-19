@@ -26,6 +26,7 @@ create type payment_status    as enum ('paid', 'partial', 'unpaid');
 create type employee_status   as enum ('active', 'inactive');
 create type activity_action   as enum ('created', 'updated', 'deleted');
 create type notification_type as enum ('sale_created', 'expense_logged', 'purchase_created', 'inventory_low', 'inventory_adjusted');
+create type inventory_type    as enum ('raw_material', 'packaging', 'finished_product');
 
 -- ---- Organizations ----------------------------------------------------------
 create table organizations (
@@ -54,6 +55,7 @@ create table inventory_categories (
   organization_id uuid not null references organizations (id) on delete cascade,
   name            text not null,
   description     text,
+  type            inventory_type not null default 'finished_product',
   created_at      timestamptz not null default now()
 );
 create index inventory_categories_org_idx on inventory_categories (organization_id);
