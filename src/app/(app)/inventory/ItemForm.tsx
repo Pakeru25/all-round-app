@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CancelLink, Field, FormError, inputClassName } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { INVENTORY_TYPES } from "@/lib/inventory";
 import type { InventoryCategory, InventoryItem } from "@/types/database";
 
 export function ItemForm({
@@ -31,6 +32,20 @@ export function ItemForm({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Type" hint="Where this sits in your stock.">
+            <select
+              name="inventory_type"
+              required
+              defaultValue={defaults?.inventory_type ?? "raw_material"}
+              className={inputClassName}
+            >
+              {INVENTORY_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Category">
             <select name="category_id" defaultValue={defaults?.category_id ?? ""} className={inputClassName}>
               <option value="">— None —</option>
@@ -41,10 +56,15 @@ export function ItemForm({
               ))}
             </select>
           </Field>
-          <Field label="Unit" hint="e.g. pieces, meters, rolls, kg">
-            <input name="unit" defaultValue={defaults?.unit ?? "pieces"} className={inputClassName} />
-          </Field>
         </div>
+
+        <Field label="Unit" hint="e.g. pieces, meters, rolls, kg">
+          <input
+            name="unit"
+            defaultValue={defaults?.unit ?? "pieces"}
+            className={`${inputClassName} sm:max-w-xs`}
+          />
+        </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Quantity in stock">
