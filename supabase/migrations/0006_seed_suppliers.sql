@@ -4,6 +4,11 @@
 -- the seeded organization. The CSV carries each supplier's total spend, order
 -- count, and a free-text notes blob (items/services + who paid); its email,
 -- phone and address columns were empty, so they stay null here.
+--
+-- Case-insensitive duplicate names from the export (e.g. Zen/ZEN, Vip/VIP,
+-- Nakon/NAKON, ayeduase/Ayeduase, "Town, Dubai"/"Town, dubai") plus the
+-- Higgsfield/Higgssfield misspelling are merged into one row each: spend and
+-- order counts are summed and their notes unioned.
 -- Safe to re-run: rows are matched on (organization_id, name).
 -- =============================================================================
 
@@ -32,8 +37,7 @@ cross join (values
   ('Asokore mampong', 275, 2, 'Items/Services: Food; Paint, brush | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Aviwill Couture', 5890, 1, 'Items/Services: Fabrics | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Awunsi', 7485, 1, 'Items/Services: Linen Fabrics | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('Ayeduase', 226, 3, 'Items/Services: Cardboard; Food | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('ayeduase', 200, 2, 'Items/Services: Food | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Ayeduase', 426, 5, 'Items/Services: Cardboard; Food | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Bismark', 6735, 6, 'Items/Services: Food; Sewing | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Bolt', 362, 3, 'Items/Services: Bolt ride; Transport | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Bonnyface', 150, 1, 'Items/Services: Magazine | Payment: Paid by Company'),
@@ -50,15 +54,14 @@ cross join (values
   ('Emelia Kumodzi', 101, 1, 'Items/Services: Cash out to Emelia Kumodzi | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Eric Obeng', 303, 1, 'Items/Services: Cash out to Eric Obeng | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Fabric', 240, 1, 'Items/Services: Fabric purchase | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('Facebook', 9129.5, 55, 'Items/Services: FACEBK 3RB5SJH2S2; FACEBK 448C5LD2S2; FACEBK 6ETBVLZZR2; FACEBK 7RQPUJ92S2; FACEBK A5774K52S2; FACEBK A9773JM2S2 (fb me); FACEBK BFRKCJR2S2; FACEBK BHHEDJR2S2; FACEBK BULGYJ52S2; FACEBK CBUY4JM2S2; FACEBK CGPL3LD2S2; FACEBK CHLSZLVZR2; FACEBK CXF8FJH2S2; FACEBK D2DSLKV2S2; FACEBK DLNAJJ92S2; FACEBK F3ACFKV2S2; FACEBK FAEPDJR2S2; FACEBK FLVCFJR2S2; FACEBK FMQHFMVZR2; FACEBK FNGU4JM2S2; FACEBK HGSK6JM2S2; FACEBK HQLQBLD2S2; FACEBK K58R4LD2S2; FACEBK NH997K52S2; FACEBK NQ7VYJH2S2; FACEBK NZ7A3LD2S2; FACEBK PKY95LD2S2; FACEBK PV49AJM2S2; FACEBK Q2BT2MVZR2; FACEBK QGMJDLD2S2; FACEBK QMLLGJ92S2; FACEBK SBXHGJ92S2; FACEBK UDFSYJ92S2; FACEBK UF6FKKV2S2; FACEBK UPHAWLZZR2; FACEBK UYJ47JM2S2; FACEBK UYQH6JM2S2; FACEBK V47ZBJR2S2; FACEBK VMXECLD2S2; FACEBK VQXGDHZCT2 (fb me); FACEBK ZAW6ZJ52S2; FACEBK ZSDDCK52S2; FACEBK ZW299K52S2; FACEBK ZZE7KKV2S2; Facebook/Instagram ads | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Facebook', 9129.50, 55, 'Items/Services: FACEBK 3RB5SJH2S2; FACEBK 448C5LD2S2; FACEBK 6ETBVLZZR2; FACEBK 7RQPUJ92S2; FACEBK A5774K52S2; FACEBK A9773JM2S2 (fb me); FACEBK BFRKCJR2S2; FACEBK BHHEDJR2S2; FACEBK BULGYJ52S2; FACEBK CBUY4JM2S2; FACEBK CGPL3LD2S2; FACEBK CHLSZLVZR2; FACEBK CXF8FJH2S2; FACEBK D2DSLKV2S2; FACEBK DLNAJJ92S2; FACEBK F3ACFKV2S2; FACEBK FAEPDJR2S2; FACEBK FLVCFJR2S2; FACEBK FMQHFMVZR2; FACEBK FNGU4JM2S2; FACEBK HGSK6JM2S2; FACEBK HQLQBLD2S2; FACEBK K58R4LD2S2; FACEBK NH997K52S2; FACEBK NQ7VYJH2S2; FACEBK NZ7A3LD2S2; FACEBK PKY95LD2S2; FACEBK PV49AJM2S2; FACEBK Q2BT2MVZR2; FACEBK QGMJDLD2S2; FACEBK QMLLGJ92S2; FACEBK SBXHGJ92S2; FACEBK UDFSYJ92S2; FACEBK UF6FKKV2S2; FACEBK UPHAWLZZR2; FACEBK UYJ47JM2S2; FACEBK UYQH6JM2S2; FACEBK V47ZBJR2S2; FACEBK VMXECLD2S2; FACEBK VQXGDHZCT2 (fb me); FACEBK ZAW6ZJ52S2; FACEBK ZSDDCK52S2; FACEBK ZW299K52S2; FACEBK ZZE7KKV2S2; Facebook/Instagram ads | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Fidouse', 550, 2, 'Items/Services: Crop tops; Crop tops Samples | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('Food', 282.5, 3, 'Items/Services: Food | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Food', 282.50, 3, 'Items/Services: Food | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Fragroma', 9820, 1, 'Items/Services: Fabrics | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Fuel', 1010, 2, 'Items/Services: Fuel | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Goil', 3450, 12, 'Items/Services: Fuel | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Google', 12, 2, 'Items/Services: Google One storage | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('Higgsfield', 5644.44, 17, 'Items/Services: Ads; Ai; HIGGSFIELD INC YK34BRNQ; Higgsfield AI; Higgsfield AI (image/video gen) | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('Higgssfield', 522, 1, 'Items/Services: Ai | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Higgsfield', 6166.44, 18, 'Items/Services: Ads; Ai; HIGGSFIELD INC YK34BRNQ; Higgsfield AI; Higgsfield AI (image/video gen) | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Hostinger', 210.01, 2, 'Items/Services: Hostinger hosting | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Hubtel', 60, 1, 'Items/Services: Bulk sms | Payment: Paid by Company'),
   ('Ibrahim Akon Dawood', 606, 1, 'Items/Services: Cash out to Ibrahim Akon Dawood | Payment: Paid by Owner, Kwadwo Siaw'),
@@ -84,12 +87,11 @@ cross join (values
   ('Motor', 480, 2, 'Items/Services: Table; Transport | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Mr Kay', 1000, 1, 'Items/Services: Payment to Mr Kay - unclear purpose | Payment: Paid by Owner, Kwadwo Siaw'),
   ('MR Owusu', 100, 1, 'Items/Services: Tote bag board | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('NAKON', 111, 2, 'Items/Services: Dtf | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw'),
-  ('Nakon', 67, 1, 'Items/Services: Dtf | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('NAKON', 178, 3, 'Items/Services: Dtf | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw'),
   ('Nyamedo', 600, 2, 'Items/Services: Nyamedo''s Issue; Photographer | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw'),
   ('OA', 300, 2, 'Items/Services: Boxes; chess delivery | Payment: Paid by Owner, Paajoe'),
   ('Obededom', 300, 1, 'Items/Services: Editing | Payment: Paid by Company'),
-  ('OpenAI', 236.5, 1, 'Items/Services: ChatGPT subscription | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('OpenAI', 236.50, 1, 'Items/Services: ChatGPT subscription | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Osei Amoah', 2500, 2, 'Items/Services: Images; Photographer | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw'),
   ('Paa', 2755, 8, 'Items/Services: Ad payment; Ad payment - FG; Ad payment - GUI; Delivery; Fabrics; Paint; Payment to Paa - Food; Store purchase | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Pakeru Ltd', 300, 1, 'Items/Services: Bank deposit to Pakeru Ltd account | Payment: Paid by Owner, Kwadwo Siaw'),
@@ -98,7 +100,7 @@ cross join (values
   ('Pattern', 100, 1, 'Items/Services: gift | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Pex print', 20, 1, 'Items/Services: Stencils cut out | Payment: Paid by Company'),
   ('Pizzaman', 2070, 4, 'Items/Services: Food; food | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('Poly Mailer Bags', 353.5, 1, 'Items/Services: Poly mailer bags | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Poly Mailer Bags', 353.50, 1, 'Items/Services: Poly mailer bags | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Pool Shoot', 500, 1, 'Items/Services: Photoshoot - Pool Shoot | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Queens', 60, 1, 'Items/Services: Food | Payment: Paid by Owner, Paajoe'),
   ('Rails', 1705, 4, 'Items/Services: Black khaki; Fabrics; Jeans | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
@@ -116,16 +118,14 @@ cross join (values
   ('Sterling', 100, 1, 'Items/Services: Tailor tnt | Payment: Paid by Company'),
   ('Sunday Measurements', 205, 1, 'Items/Services: Sunday measurements | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Super', 2900, 3, 'Items/Services: T-shirt; T-shirt top up; T-shirts | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw'),
-  ('Szning', 162.5, 1, 'Items/Services: Food | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('Szning', 162.50, 1, 'Items/Services: Food | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Taxi', 20, 1, 'Items/Services: Transport | Payment: Paid by Owner, Paajoe'),
   ('Total prints', 70, 1, 'Items/Services: Newspaper | Payment: Paid by Company'),
-  ('Town', 12291.5, 43, 'Items/Services: Brown Envelope; Caps; Curves and fabrics; Fabric; Fabrics; Fabrics and Dtf; Foam; Gildan; Gloves; Jeans; Jeans fabric; Leather Bag; Press on buttons; Prototype Fabrics; Ropes; Still; Suit lining; T-shirt; T-shirts; Tape measure; Thread, Zippers; Waza fabrics; Zip and Buttons; Zippers; caps; fabrics; laces; stamp | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('Town, Dubai', 793, 4, 'Items/Services: Ingredients; Leather; Sample, cap | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('Town, dubai', 330, 2, 'Items/Services: Leather; Leather sample | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
+  ('Town', 12291.50, 43, 'Items/Services: Brown Envelope; Caps; Curves and fabrics; Fabric; Fabrics; Fabrics and Dtf; Foam; Gildan; Gloves; Jeans; Jeans fabric; Leather Bag; Press on buttons; Prototype Fabrics; Ropes; Still; Suit lining; T-shirt; T-shirts; Tape measure; Thread, Zippers; Waza fabrics; Zip and Buttons; Zippers; caps; fabrics; laces; stamp | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
+  ('Town, Dubai', 1123, 6, 'Items/Services: Ingredients; Leather; Sample, cap; Leather sample | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Transport', 205.53, 1, 'Items/Services: Fabrics | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('UT', 8360.5, 6, 'Items/Services: Industrial cutter; Plastic band; button hole machine; button hole machine(service charge); buttos | Payment: Paid by OPM (Abeiku); Paid by Owner, Kwadwo Siaw'),
-  ('VIP', 1020, 6, 'Items/Services: Bus; Delivery; Poly bags | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
-  ('Vip', 151.5, 1, 'Items/Services: Boxes | Payment: Paid by Owner, Kwadwo Siaw'),
+  ('UT', 8360.50, 6, 'Items/Services: Industrial cutter; Plastic band; button hole machine; button hole machine(service charge); buttos | Payment: Paid by OPM (Abeiku); Paid by Owner, Kwadwo Siaw'),
+  ('VIP', 1171.50, 7, 'Items/Services: Bus; Delivery; Poly bags; Boxes | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('VIP, Accra', 320, 1, 'Items/Services: polymailer & Delivery | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Vytal', 14, 1, 'Items/Services: Printing | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Vytal prints', 1428, 8, 'Items/Services: Cards; Stickers; Stickers and Cards | Payment: Paid by Company; Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
@@ -133,8 +133,7 @@ cross join (values
   ('Water bill', 120, 2, 'Items/Services: Water | Payment: Paid by Owner, Kwadwo Siaw'),
   ('Wilson', 100, 2, 'Items/Services: Transport; transport | Payment: Paid by Owner, Kwadwo Siaw; Paid by Owner, Paajoe'),
   ('Woodin', 1042, 1, 'Items/Services: Fabrics | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('Zen', 100, 1, 'Items/Services: Fuel | Payment: Paid by Owner, Kwadwo Siaw'),
-  ('ZEN', 400, 1, 'Items/Services: Fuel | Payment: Paid by Owner, Kwadwo Siaw')
+  ('ZEN', 500, 2, 'Items/Services: Fuel | Payment: Paid by Owner, Kwadwo Siaw')
 ) as v(name, amount_spent, order_count, notes)
 where o.name = 'Pakeru'
   and not exists (
