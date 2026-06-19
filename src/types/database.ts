@@ -27,11 +27,15 @@ export interface Organization {
   created_at: string;
 }
 
+/** The three top-level groups every category belongs to. */
+export type InventoryType = "raw_material" | "packaging_material" | "finished_product";
+
 export interface InventoryCategory {
   id: string;
   organization_id: string;
   name: string;
   description: string | null;
+  type: InventoryType;
   created_at: string;
 }
 
@@ -53,9 +57,9 @@ export interface InventoryItem {
   updated_at: string;
 }
 
-/** An inventory item joined with its category name (for list views). */
+/** An inventory item joined with its category name + type (for list views). */
 export interface InventoryItemWithCategory extends InventoryItem {
-  inventory_categories: { name: string } | null;
+  inventory_categories: { name: string; type: InventoryType } | null;
 }
 
 export interface Customer {

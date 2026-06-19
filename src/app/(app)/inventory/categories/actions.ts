@@ -5,6 +5,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionContext } from "@/lib/auth/session";
 import { str, strOrNull } from "@/lib/forms";
+import { INVENTORY_TYPE_ORDER } from "@/lib/inventory";
+import type { InventoryType } from "@/types/database";
+
+function toType(value: FormDataEntryValue | null): InventoryType {
+  const v = typeof value === "string" ? value : "";
+  return (INVENTORY_TYPE_ORDER as string[]).includes(v) ? (v as InventoryType) : "finished_product";
+}
 
 export async function createCategory(formData: FormData) {
   const ctx = await getSessionContext();
@@ -16,6 +23,7 @@ export async function createCategory(formData: FormData) {
     organization_id: ctx.profile.organization_id,
     name: str(formData.get("name")),
     description: strOrNull(formData.get("description")),
+    type: toType(formData.get("type")),
   });
 
   if (error) redirect(`/inventory/categories?error=${encodeURIComponent(error.message)}`);

@@ -3,6 +3,7 @@ import { Card, CancelLink, Field, FormError, inputClassName } from "@/components
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
+import { INVENTORY_TYPE_LABELS, INVENTORY_TYPE_ORDER } from "@/lib/inventory";
 import type { InventoryCategory } from "@/types/database";
 import { createCategory, deleteCategory } from "./actions";
 
@@ -26,9 +27,18 @@ export default async function CategoriesPage({
       <Card>
         <form action={createCategory} className="flex flex-col gap-4">
           <FormError message={error} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Name">
               <input name="name" required className={inputClassName} />
+            </Field>
+            <Field label="Group" hint="Which inventory type this category belongs to.">
+              <select name="type" defaultValue="finished_product" className={inputClassName}>
+                {INVENTORY_TYPE_ORDER.map((t) => (
+                  <option key={t} value={t}>
+                    {INVENTORY_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Description">
               <input name="description" className={inputClassName} />
@@ -49,6 +59,7 @@ export default async function CategoriesPage({
               {categories.map((cat) => (
                 <tr key={cat.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                   <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{cat.name}</td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{INVENTORY_TYPE_LABELS[cat.type]}</td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{cat.description ?? "—"}</td>
                   {canDelete ? (
                     <td className="px-4 py-3 text-right">
