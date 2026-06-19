@@ -24,7 +24,7 @@ export default async function InventoryTypePage({ params }: { params: Promise<{ 
   if (!isInventoryType(type)) notFound();
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("inventory_items")
     .select("category_id,unit,quantity_in_stock,cost_price,selling_price,inventory_categories(name)")
     .eq("inventory_type", type)
@@ -58,11 +58,38 @@ export default async function InventoryTypePage({ params }: { params: Promise<{ 
         </Link>
       </div>
 
-      {categories.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          No items in this stock type yet.
+      {error ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <strong>Database error:</strong> {error.message}
+          {error.message.includes("inventory_type") ? (
+            <p className="mt-1">
+              The <code className="font-mono">inventory_type</code> column is missing. Run{" "}
+              <code className="font-mono">0006_inventory_type.sql</code> then{" "}
+              <code className="font-mono">NOTIFY pgrst, &apos;reload schema&apos;;</code> in your Supabase SQL editor.
+            </p>
+          ) : null}
         </div>
-      ) : (
+      ) : null}
+
+      {!error && categories.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+          No items in this stock type yet.{" "}
+          {canWrite ? (
+            <>
+              <Link href="/inventory/new" className="underline">
+                Add one
+              </Link>{" "}
+              or{" "}
+              <Link href="/inventory/import" className="underline">
+                import from CSV
+              </Link>
+              .
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!error && categories.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <table className="w-full text-sm">
             <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
@@ -97,7 +124,7 @@ export default async function InventoryTypePage({ params }: { params: Promise<{ 
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

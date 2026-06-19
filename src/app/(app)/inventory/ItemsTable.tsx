@@ -59,7 +59,9 @@ export function ItemsTable({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatCurrency(item.cost_price)}</td>
-                <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatCurrency(item.selling_price)}</td>
+                <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                  {item.selling_price > 0 ? formatCurrency(item.selling_price) : "N/A"}
+                </td>
                 {canWrite ? (
                   <td className="px-4 py-3 text-right">
                     <Link
