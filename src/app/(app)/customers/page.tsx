@@ -1,25 +1,29 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import { TIER_BADGE, TIER_LABELS, tierForSpend, type CustomerTier } from "@/lib/segments";
 import type { CustomerStats } from "@/types/database";
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tier?: string }>;
+  searchParams: Promise<{ tier?: string; q?: string }>;
 }) {
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
-  const { tier } = await searchParams;
+  const { tier, q } = await searchParams;
   const activeTier: CustomerTier | null = tier === "elite" || tier === "edition" ? tier : null;
+  const query = q ?? "";
 
   const supabase = await createClient();
   const { data } = await supabase.from("customer_stats").select("*").order("total_spent", { ascending: false });
   let customers = (data as CustomerStats[] | null) ?? [];
   if (activeTier) customers = customers.filter((c) => tierForSpend(Number(c.total_spent)) === activeTier);
+  if (query) customers = customers.filter((c) => matchesQuery(query, c.name, c.email, c.phone));
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -29,18 +33,23 @@ export default async function CustomersPage({
         action={canWrite ? { href: "/customers/new", label: "Add customer" } : undefined}
       />
 
-      {activeTier ? (
-        <div className="mb-4">
+      <div className="mb-4 flex items-center gap-4">
+        <SearchBar placeholder="Search customers…" />
+        {activeTier ? (
           <Link href="/customers" className="text-sm text-zinc-500 underline">
             Clear filter
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {customers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          {activeTier ? "No customers in this tier yet." : "No customers yet."}
-          {canWrite && !activeTier ? " Use “Add customer” to create your first one." : ""}
+          {query
+            ? "No customers match your search."
+            : activeTier
+              ? "No customers in this tier yet."
+              : "No customers yet."}
+          {canWrite && !activeTier && !query ? " Use “Add customer” to create your first one." : ""}
         </div>
       ) : (
         <ul className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">

@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import type { InventoryItemWithCategory } from "@/types/database";
 
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; filter?: string }>;
+  searchParams: Promise<{ category?: string; filter?: string; q?: string }>;
 }) {
   const { profile } = await requireRole(["owner", "manager", "staff"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
-  const { category, filter } = await searchParams;
+  const { category, filter, q } = await searchParams;
   const lowOnly = filter === "low";
+  const search = q ?? "";
 
   const supabase = await createClient();
   let query = supabase.from("inventory_items").select("*, inventory_categories(name)").order("name");
@@ -22,6 +25,9 @@ export default async function InventoryPage({
   let items = (data as InventoryItemWithCategory[] | null) ?? [];
   if (lowOnly) {
     items = items.filter((it) => it.reorder_level > 0 && it.quantity_in_stock <= it.reorder_level);
+  }
+  if (search) {
+    items = items.filter((it) => matchesQuery(search, it.name, it.sku, it.description));
   }
 
   let activeLabel: string | null = null;
@@ -40,7 +46,8 @@ export default async function InventoryPage({
         action={canWrite ? { href: "/inventory/new", label: "Add item" } : undefined}
       />
 
-      <div className="mb-4 flex items-center gap-4">
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <SearchBar placeholder="Search items…" />
         {canWrite ? (
           <Link href="/inventory/categories" className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
             Manage categories
@@ -55,8 +62,8 @@ export default async function InventoryPage({
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          {activeLabel ? "No items match this filter." : "No items yet."}
-          {canWrite && !activeLabel ? " Use “Add item” to create your first one." : ""}
+          {search ? "No items match your search." : activeLabel ? "No items match this filter." : "No items yet."}
+          {canWrite && !activeLabel && !search ? " Use “Add item” to create your first one." : ""}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

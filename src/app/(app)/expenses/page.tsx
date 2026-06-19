@@ -1,18 +1,21 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import type { ExpenseWithCategory } from "@/types/database";
 
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; q?: string }>;
 }) {
   const { profile } = await requireRole(["owner", "manager", "accountant"]);
   const canWrite = profile.role === "owner" || profile.role === "manager";
-  const { category } = await searchParams;
+  const { category, q } = await searchParams;
+  const search = q ?? "";
 
   const supabase = await createClient();
   let query = supabase
@@ -21,7 +24,10 @@ export default async function ExpensesPage({
     .order("expense_date", { ascending: false });
   if (category) query = query.eq("category_id", category);
   const { data } = await query;
-  const expenses = (data as ExpenseWithCategory[] | null) ?? [];
+  let expenses = (data as ExpenseWithCategory[] | null) ?? [];
+  if (search) {
+    expenses = expenses.filter((e) => matchesQuery(search, e.description, e.expense_number, e.amount));
+  }
   const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
   let activeLabel: string | null = null;
@@ -38,22 +44,29 @@ export default async function ExpensesPage({
         action={canWrite ? { href: "/expenses/new", label: "Log expense" } : undefined}
       />
 
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="text-sm text-zinc-500">
-          {expenses.length} expense{expenses.length === 1 ? "" : "s"} · total{" "}
-          <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatCurrency(total)}</span>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <SearchBar placeholder="Search expenses…" />
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-zinc-500">
+            {expenses.length} expense{expenses.length === 1 ? "" : "s"} · total{" "}
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatCurrency(total)}</span>
+          </div>
+          {activeLabel ? (
+            <Link href="/expenses" className="text-sm text-zinc-500 underline">
+              Clear filter
+            </Link>
+          ) : null}
         </div>
-        {activeLabel ? (
-          <Link href="/expenses" className="text-sm text-zinc-500 underline">
-            Clear filter
-          </Link>
-        ) : null}
       </div>
 
       {expenses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          {activeLabel ? "No expenses in this category." : "No expenses yet."}
-          {canWrite && !activeLabel ? " Use “Log expense” to record your first one." : ""}
+          {search
+            ? "No expenses match your search."
+            : activeLabel
+              ? "No expenses in this category."
+              : "No expenses yet."}
+          {canWrite && !activeLabel && !search ? " Use “Log expense” to record your first one." : ""}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

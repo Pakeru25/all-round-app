@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
+import { matchesQuery } from "@/lib/search";
 import type { Employee, Profile, Role } from "@/types/database";
 
 type Row = {
@@ -27,8 +29,14 @@ const ROLE_BADGE: Record<Role, string> = {
   accountant: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200",
 };
 
-export default async function EmployeesPage() {
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireRole(["owner"]);
+  const { q } = await searchParams;
+  const search = q ?? "";
 
   const supabase = await createClient();
   const [profilesRes, employeesRes] = await Promise.all([
@@ -45,7 +53,7 @@ export default async function EmployeesPage() {
       "id" | "full_name" | "position" | "email" | "phone" | "status"
     >[] | null) ?? [];
 
-  const rows: Row[] = [
+  let rows: Row[] = [
     ...profiles.map<Row>((p) => ({
       kind: "user",
       id: p.id,
@@ -64,6 +72,12 @@ export default async function EmployeesPage() {
     })),
   ].sort((a, b) => a.name.localeCompare(b.name));
 
+  if (search) {
+    rows = rows.filter((r) =>
+      matchesQuery(search, r.name, r.subtitle, r.role ? ROLE_LABELS[r.role] : "Employee"),
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -72,9 +86,15 @@ export default async function EmployeesPage() {
         action={{ href: "/employees/new", label: "Add employee" }}
       />
 
+      <div className="mb-4">
+        <SearchBar placeholder="Search employees…" />
+      </div>
+
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          No team members yet. Use “Add employee” to create the first record.
+          {search
+            ? "No team members match your search."
+            : "No team members yet. Use “Add employee” to create the first record."}
         </div>
       ) : (
         <ul className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { formatDateTime } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import type { ActivityLogEntry } from "@/types/database";
 
 const ACTION_STYLES: Record<string, string> = {
@@ -23,8 +25,14 @@ function hrefFor(entry: ActivityLogEntry): string | null {
   return base ? `${base}/${entry.entity_id}` : null;
 }
 
-export default async function ActivityPage() {
+export default async function ActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireRole(["owner", "manager"]);
+  const { q } = await searchParams;
+  const search = q ?? "";
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -32,7 +40,10 @@ export default async function ActivityPage() {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(100);
-  const entries = (data as ActivityLogEntry[] | null) ?? [];
+  let entries = (data as ActivityLogEntry[] | null) ?? [];
+  if (search) {
+    entries = entries.filter((e) => matchesQuery(search, e.description, e.entity_type, e.action));
+  }
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -41,9 +52,15 @@ export default async function ActivityPage() {
         description="Every action by every user, newest first. This trail is permanent — it can't be edited or deleted."
       />
 
+      <div className="mb-4">
+        <SearchBar placeholder="Search activity…" />
+      </div>
+
       {entries.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-          No activity recorded yet. Logging a sale, purchase or expense will appear here.
+          {search
+            ? "No activity matches your search."
+            : "No activity recorded yet. Logging a sale, purchase or expense will appear here."}
         </div>
       ) : (
         <ol className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
