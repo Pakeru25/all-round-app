@@ -80,6 +80,8 @@ export interface Supplier {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  amount_spent: number;
+  order_count: number;
   created_at: string;
 }
 
