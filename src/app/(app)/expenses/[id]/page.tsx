@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/SubmitButton";
@@ -40,7 +39,22 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     .eq("id", id)
     .single();
   const expense = expData as ExpenseWithCategory | null;
-  if (!expense) notFound();
+  if (!expense) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <PageHeader title="Expense not found" description="This expense may have been deleted." />
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+          The activity log keeps a permanent record of past actions, so this entry remains even after the
+          expense itself was removed.
+          <div className="mt-4">
+            <Link href="/expenses" className="font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300">
+              Back to expenses
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   let recordedByName: string | null = null;
   if (expense.recorded_by) {

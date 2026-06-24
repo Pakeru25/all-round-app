@@ -69,25 +69,48 @@ export default async function ExpensesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {expenses.map((e) => (
-                <tr key={e.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{e.expense_number ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatDate(e.expense_date)}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{e.expense_categories?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{e.description ?? "—"}</td>
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{formatCurrency(e.amount)}</td>
-                  {canWrite ? (
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/expenses/${e.id}/edit`}
-                        className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300"
-                      >
-                        Edit
+              {expenses.map((e) => {
+                const detail = `/expenses/${e.id}`;
+                return (
+                  <tr key={e.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <td className="p-0 font-mono text-xs text-zinc-500">
+                      <Link href={detail} className="block px-4 py-3">
+                        {e.expense_number ?? "—"}
                       </Link>
                     </td>
-                  ) : null}
-                </tr>
-              ))}
+                    <td className="p-0 text-zinc-600 dark:text-zinc-400">
+                      <Link href={detail} className="block px-4 py-3">
+                        {formatDate(e.expense_date)}
+                      </Link>
+                    </td>
+                    <td className="p-0 text-zinc-600 dark:text-zinc-400">
+                      <Link href={detail} className="block px-4 py-3">
+                        {e.expense_categories?.name ?? "—"}
+                      </Link>
+                    </td>
+                    <td className="p-0 text-zinc-600 dark:text-zinc-400">
+                      <Link href={detail} className="block px-4 py-3">
+                        {e.description ?? "—"}
+                      </Link>
+                    </td>
+                    <td className="p-0 font-medium text-zinc-900 dark:text-zinc-50">
+                      <Link href={detail} className="block px-4 py-3">
+                        {formatCurrency(e.amount)}
+                      </Link>
+                    </td>
+                    {canWrite ? (
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/expenses/${e.id}/edit`}
+                          className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300"
+                        >
+                          Edit
+                        </Link>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
