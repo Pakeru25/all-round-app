@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FormError } from "@/components/ui/form";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import type { Employee, Profile, Role } from "@/types/database";
@@ -28,14 +29,18 @@ const ROLE_BADGE: Record<Role, string> = {
 };
 
 export default async function EmployeesPage() {
-  await requireRole(["owner"]);
+  const { profile } = await requireRole(["owner"]);
 
   const supabase = await createClient();
   const [profilesRes, employeesRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id,full_name,email,role,avatar_url,is_active,organization_id,created_at"),
-    supabase.from("employees").select("id,full_name,position,email,phone,status"),
+      .select("id,full_name,email,role,avatar_url,is_active,organization_id,created_at")
+      .eq("organization_id", profile.organization_id),
+    supabase
+      .from("employees")
+      .select("id,full_name,position,email,phone,status")
+      .eq("organization_id", profile.organization_id),
   ]);
 
   const profiles = (profilesRes.data as Profile[] | null) ?? [];
@@ -44,6 +49,7 @@ export default async function EmployeesPage() {
       Employee,
       "id" | "full_name" | "position" | "email" | "phone" | "status"
     >[] | null) ?? [];
+  const queryError = profilesRes.error?.message ?? employeesRes.error?.message;
 
   const rows: Row[] = [
     ...profiles.map<Row>((p) => ({
@@ -72,11 +78,17 @@ export default async function EmployeesPage() {
         action={{ href: "/employees/new", label: "Add employee" }}
       />
 
-      {rows.length === 0 ? (
+      {queryError ? (
+        <div className="mb-4">
+          <FormError message={`Couldn’t load team: ${queryError}`} />
+        </div>
+      ) : null}
+
+      {rows.length === 0 && !queryError ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
           No team members yet. Use “Add employee” to create the first record.
         </div>
-      ) : (
+      ) : rows.length === 0 ? null : (
         <ul className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           <li className="hidden px-4 py-3 text-xs uppercase tracking-wide text-zinc-500 sm:grid sm:grid-cols-[2fr_1.5fr_1fr_0.6fr] sm:gap-4 sm:items-center">
             <span>Name</span>
